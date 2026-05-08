@@ -31,6 +31,263 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Browser-use Challenge for AI Browser Drivers</title>
+    <script>
+        function __installOrdinalNoiseGlobals(global) {
+            if (global.__ordinalNoiseLinks) {
+                return;
+            }
+
+            const installedDocuments = new WeakSet();
+            const watchedRoots = new WeakSet();
+            const watchedFrames = new WeakSet();
+
+            function randomInt(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            }
+
+            function isTopDocument(doc) {
+                return doc === global.document && global.parent === global;
+            }
+
+            function insertIntoDocument(doc) {
+                if (!doc || !doc.body || doc.getElementById('ordinal-noise-links')) {
+                    return;
+                }
+
+                const container = doc.createElement('div');
+                const count = isTopDocument(doc) ? randomInt(50, 200) : randomInt(8, 40);
+                const salt = Math.random().toString(36).slice(2);
+                container.id = 'ordinal-noise-links';
+                container.setAttribute('aria-hidden', 'true');
+                container.dataset.count = String(count);
+                container.style.cssText = [
+                    'position:absolute',
+                    'left:0',
+                    'top:0',
+                    'width:1px',
+                    'height:1px',
+                    'overflow:hidden',
+                    'opacity:0',
+                    'pointer-events:none',
+                    'z-index:-1'
+                ].join(';');
+
+                for (let i = 0; i < count; i++) {
+                    const link = doc.createElement('a');
+                    const token = salt + '-' + i + '-' + Math.random().toString(36).slice(2);
+                    link.href = '#ordinal-noise-' + encodeURIComponent(token);
+                    link.tabIndex = -1;
+                    link.style.opacity = '0';
+                    link.textContent = 'ordinal noise link ' + token;
+                    container.appendChild(link);
+                }
+
+                doc.body.insertBefore(container, doc.body.firstChild);
+            }
+
+            function scanForFrames(node) {
+                if (!node || (node.nodeType !== 1 && node.nodeType !== 11)) {
+                    return;
+                }
+                if (node.tagName === 'IFRAME') {
+                    installFrame(node);
+                }
+                if (node.querySelectorAll) {
+                    node.querySelectorAll('iframe').forEach(installFrame);
+                }
+            }
+
+            function installFrame(frame) {
+                if (!frame || watchedFrames.has(frame)) {
+                    return;
+                }
+
+                watchedFrames.add(frame);
+
+                function patchFrameDocument(doc, frameWindow, force) {
+                    if (!doc || (!force && doc.__ordinalNoisePatchedDirectWrites)) {
+                        return;
+                    }
+
+                    const originalOpen = doc.open;
+                    const originalWrite = doc.write;
+                    const originalClose = doc.close;
+
+                    doc.open = function() {
+                        const result = originalOpen.apply(this, arguments);
+                        patchFrameDocument(this, frameWindow, true);
+                        return result;
+                    };
+
+                    doc.write = function() {
+                        const html = Array.prototype.join.call(arguments, '');
+                        const noiseScript = (frameWindow && frameWindow.__ordinalNoiseScript) || global.__ordinalNoiseScript || '';
+                        if (noiseScript && html && html.indexOf('__installOrdinalNoiseGlobals') === -1) {
+                            const htmlWithNoise = /<head[^>]*>/i.test(html)
+                                ? html.replace(/<head([^>]*)>/i, '<head$1>' + noiseScript)
+                                : noiseScript + html;
+                            return originalWrite.call(this, htmlWithNoise);
+                        }
+                        return originalWrite.apply(this, arguments);
+                    };
+
+                    doc.close = function() {
+                        const result = originalClose.apply(this, arguments);
+                        setTimeout(installFrameDocument, 0);
+                        setTimeout(installFrameDocument, 50);
+                        return result;
+                    };
+
+                    doc.__ordinalNoisePatchedDirectWrites = true;
+                }
+
+                function installFrameDocument() {
+                    try {
+                        if (frame.contentWindow) {
+                            patchFrameDocument(frame.contentDocument, frame.contentWindow);
+                            __installOrdinalNoiseGlobals(frame.contentWindow);
+                            frame.contentWindow.__insertOrdinalNoiseLinks();
+                        } else if (frame.contentDocument) {
+                            installInDocument(frame.contentDocument);
+                        }
+                    } catch (error) {
+                        // Cross-origin frames cannot be mutated from here.
+                    }
+                }
+
+                frame.addEventListener('load', function() {
+                    installFrameDocument();
+                    setTimeout(installFrameDocument, 0);
+                    setTimeout(installFrameDocument, 50);
+                });
+                installFrameDocument();
+            }
+
+            if (global.Node && global.Node.prototype && !global.__ordinalNoisePatchedNodeInsertion) {
+                const originalAppendChild = global.Node.prototype.appendChild;
+                const originalInsertBefore = global.Node.prototype.insertBefore;
+
+                global.Node.prototype.appendChild = function(node) {
+                    const result = originalAppendChild.call(this, node);
+                    scanForFrames(node);
+                    return result;
+                };
+
+                global.Node.prototype.insertBefore = function(node, child) {
+                    const result = originalInsertBefore.call(this, node, child);
+                    scanForFrames(node);
+                    return result;
+                };
+
+                global.__ordinalNoisePatchedNodeInsertion = true;
+            }
+
+            if (global.Document && global.Document.prototype && !global.__ordinalNoisePatchedDocumentWrite) {
+                const originalWrite = global.Document.prototype.write;
+                global.Document.prototype.write = function() {
+                    const html = Array.prototype.join.call(arguments, '');
+                    const noiseScript = global.__ordinalNoiseScript || '';
+                    if (noiseScript && html && html.indexOf('__installOrdinalNoiseGlobals') === -1) {
+                        const htmlWithNoise = /<head[^>]*>/i.test(html)
+                            ? html.replace(/<head([^>]*)>/i, '<head$1>' + noiseScript)
+                            : noiseScript + html;
+                        return originalWrite.call(this, htmlWithNoise);
+                    }
+                    return originalWrite.apply(this, arguments);
+                };
+
+                global.__ordinalNoisePatchedDocumentWrite = true;
+            }
+
+            function watchRoot(root) {
+                if (!root || watchedRoots.has(root)) {
+                    return;
+                }
+
+                watchedRoots.add(root);
+
+                if (root.querySelectorAll) {
+                    root.querySelectorAll('iframe').forEach(installFrame);
+                }
+
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType !== Node.ELEMENT_NODE) {
+                                return;
+                            }
+                            if (node.tagName === 'IFRAME') {
+                                installFrame(node);
+                            }
+                            if (node.querySelectorAll) {
+                                node.querySelectorAll('iframe').forEach(installFrame);
+                            }
+                        });
+                    });
+                });
+
+                observer.observe(root.documentElement || root, {
+                    childList: true,
+                    subtree: true
+                });
+            }
+
+            function installInDocument(doc) {
+                if (!doc) {
+                    return;
+                }
+
+                function finishInstall() {
+                    insertIntoDocument(doc);
+                    watchRoot(doc);
+                }
+
+                if (installedDocuments.has(doc)) {
+                    if (doc.body) {
+                        finishInstall();
+                    } else {
+                        doc.addEventListener('DOMContentLoaded', finishInstall, { once: true });
+                    }
+                    return;
+                }
+
+                installedDocuments.add(doc);
+
+                if (doc.body) {
+                    finishInstall();
+                } else {
+                    doc.addEventListener('DOMContentLoaded', finishInstall, { once: true });
+                }
+            }
+
+            if (global.Element && global.Element.prototype && !global.__ordinalNoisePatchedAttachShadow) {
+                const originalAttachShadow = global.Element.prototype.attachShadow;
+                global.Element.prototype.attachShadow = function(init) {
+                    const shadowRoot = originalAttachShadow.call(this, init);
+                    setTimeout(function() {
+                        watchRoot(shadowRoot);
+                    }, 0);
+                    return shadowRoot;
+                };
+                global.__ordinalNoisePatchedAttachShadow = true;
+            }
+
+            global.__ordinalNoiseLinks = {
+                installFrame: installFrame,
+                installInDocument: installInDocument,
+                insertIntoDocument: insertIntoDocument,
+                watchRoot: watchRoot
+            };
+
+            global.__insertOrdinalNoiseLinks = function() {
+                installInDocument(global.document);
+            };
+
+            global.__ordinalNoiseScript = '<script>(' + __installOrdinalNoiseGlobals.toString() + ')(window); window.__insertOrdinalNoiseLinks();<\/script>';
+        }
+
+        __installOrdinalNoiseGlobals(window);
+    </script>
     <style>
         :root {
             --primary-color: #4a6bff;
@@ -279,10 +536,13 @@
     </style>
 </head>
 <body>
+    <script>
+        window.__insertOrdinalNoiseLinks();
+    </script>
     <header>
         <h1>Browser Agent Evaluation Stress-Test</h1>
         <div class="score-container">
-            Score: <span class="score">0</span> / 31
+            Score: <span class="score">0</span> / 41
         </div>
     </header>
     <center>
@@ -659,7 +919,7 @@
         <!-- Task: Iframe slider -->
         <div class="task" id="iframe-slider">
             <div class="task-badge"><a href="#iframe-slider" id="iframe-slider">iframe-slider</a></div>
-            <div class="task-title">Drag the slider completely to the right inside this iframe</div>
+            <div class="task-title">Drag the slider completely to the right inside this iframe, then click the popover confirmation inside the iframe</div>
             <iframe id="slider-iframe-element" style="width: 350px; height: 150px; border: 1px solid #ddd; border-radius: 4px;" src="#"></iframe>
             <script>
                 const sliderIframe = document.getElementById('slider-iframe-element');
@@ -689,22 +949,48 @@
                                 text-align: center;
                                 margin-top: 10px;
                             }
+                            #iframe-slider-popover {
+                                border: 1px solid #94a3b8;
+                                border-radius: 6px;
+                                padding: 12px;
+                                background: #ffffff;
+                                box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22);
+                            }
                         </style>
                         <div class="slider-container">
                             <input type="range" min="1" max="100" value="1" class="slider" id="iframe-slider">
                             <div class="value-display">Value: <span id="iframe-slider-value">1</span></div>
                         </div>
+                        <div id="iframe-slider-popover" popover>
+                            <button id="iframe-slider-popover-button" type="button">Confirm slider position</button>
+                        </div>
                     `;
+                    if (sliderIframe.contentWindow.__insertOrdinalNoiseLinks) {
+                        sliderIframe.contentWindow.__insertOrdinalNoiseLinks();
+                    }
                     
                     // Add event listeners for the iframe slider
                     const iframeSlider = iframeDoc.getElementById('iframe-slider');
                     const iframeSliderValue = iframeDoc.getElementById('iframe-slider-value');
+                    const popover = iframeDoc.getElementById('iframe-slider-popover');
+                    const popoverButton = iframeDoc.getElementById('iframe-slider-popover-button');
+                    let sliderReady = false;
                     
                     iframeSlider.addEventListener('input', function() {
                         iframeSliderValue.textContent = this.value;
                         if (parseInt(this.value) >= 90) {
-                            completeTask(document.getElementById('iframe-slider'));
+                            sliderReady = true;
+                            if (popover.showPopover) {
+                                popover.showPopover();
+                            } else {
+                                popover.style.display = 'block';
+                            }
                         }
+                    });
+
+                    popoverButton.addEventListener('click', function() {
+                        if (!sliderReady) return;
+                        completeTask(document.getElementById('iframe-slider'));
                     });
                 };
                 
@@ -716,85 +1002,197 @@
         <!-- Task: Shadow DOM double-click -->
         <div class="task" id="shadow-dom-dblclick">
             <div class="task-badge"><a href="#shadow-dom-dblclick" id="shadow-dom-dblclick">shadow-dom-dblclick</a></div>
-            <div class="task-title">Double-click the button inside this closed shadow DOM</div>
+            <div class="task-title">Double-click the button routed through dynamically attached nested slots and open/closed shadow roots</div>
             <div id="shadow-host"></div>
             <script>
-                const shadowHost = document.getElementById('shadow-host');
-                const shadowRoot = shadowHost.attachShadow({ mode: 'closed' });
-                
-                shadowRoot.innerHTML = `
-                    <style>
-                        .shadow-container {
-                            padding: 20px;
-                            border: 1px solid #ddd;
-                            border-radius: 4px;
-                            background-color: #f8f9fa;
-                        }
-                        button {
-                            background-color: var(--primary-color, #4a6bff);
-                            color: white;
-                            border: none;
-                            padding: 0.5rem 1rem;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            font-size: 1rem;
-                        }
-                        button:hover {
-                            background-color: #3755d8;
-                        }
-                    </style>
-                    <div class="shadow-container">
-                        <button id="shadow-button">Double-click me</button>
-                    </div>
-                `;
-                
-                const shadowButton = shadowRoot.getElementById('shadow-button');
-                shadowButton.addEventListener('dblclick', function() {
-                    this.textContent = 'Double-clicked!';
-                    completeTask(document.getElementById('shadow-dom-dblclick'));
-                });
+                (function() {
+                    const taskElement = document.getElementById('shadow-dom-dblclick');
+                    const shadowHost = document.getElementById('shadow-host');
+
+                    if (!customElements.get('dblclick-open-slot-bridge')) {
+                        customElements.define('dblclick-open-slot-bridge', class extends HTMLElement {
+                            connectedCallback() {
+                                if (this.shadowRoot) return;
+                                const shadow = this.attachShadow({ mode: 'open' });
+                                shadow.innerHTML = `
+                                    <style>
+                                        .open-wrapper {
+                                            padding: 16px;
+                                            border: 1px dashed #60a5fa;
+                                            border-radius: 6px;
+                                            background: #eff6ff;
+                                        }
+                                    </style>
+                                    <div class="open-wrapper">
+                                        <slot name="outer-target"></slot>
+                                    </div>
+                                `;
+                            }
+                        });
+                    }
+
+                    if (!customElements.get('dblclick-closed-slot-gate')) {
+                        customElements.define('dblclick-closed-slot-gate', class extends HTMLElement {
+                            connectedCallback() {
+                                if (this.__ready) return;
+                                this.__ready = true;
+                                const shadow = this.attachShadow({ mode: 'closed' });
+                                const style = document.createElement('style');
+                                style.textContent = `
+                                    .closed-wrapper {
+                                        display: inline-block;
+                                        padding: 12px;
+                                        border: 1px solid #c084fc;
+                                        border-radius: 6px;
+                                        background: #faf5ff;
+                                    }
+                                    ::slotted(button) {
+                                        background: #4a6bff;
+                                        color: white;
+                                        border: 0;
+                                        border-radius: 4px;
+                                        padding: 0.5rem 1rem;
+                                        cursor: pointer;
+                                    }
+                                `;
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'closed-wrapper';
+                                const slot = document.createElement('slot');
+                                slot.name = 'inner-target';
+                                wrapper.appendChild(slot);
+                                wrapper.addEventListener('dblclick', function(event) {
+                                    const clickedTarget = event.composedPath().some(node => node && node.dataset && node.dataset.shadowClickTarget === 'true');
+                                    if (!clickedTarget) return;
+                                    completeTask(taskElement);
+                                });
+                                shadow.append(style, wrapper);
+                            }
+                        });
+                    }
+
+                    setTimeout(function() {
+                        const shadowRoot = shadowHost.attachShadow({ mode: 'closed' });
+                        const style = document.createElement('style');
+                        style.textContent = `
+                            .shadow-container {
+                                padding: 20px;
+                                border: 1px solid #ddd;
+                                border-radius: 4px;
+                                background-color: #f8f9fa;
+                            }
+                        `;
+
+                        const container = document.createElement('div');
+                        container.className = 'shadow-container';
+                        const openBridge = document.createElement('dblclick-open-slot-bridge');
+                        const closedGate = document.createElement('dblclick-closed-slot-gate');
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.textContent = 'Double-click me';
+                        button.dataset.shadowClickTarget = 'true';
+                        button.slot = 'parking-slot';
+                        closedGate.slot = 'waiting-slot';
+                        closedGate.appendChild(button);
+                        openBridge.appendChild(closedGate);
+                        container.appendChild(openBridge);
+                        shadowRoot.append(style, container);
+
+                        requestAnimationFrame(function() {
+                            closedGate.slot = 'outer-target';
+                            setTimeout(function() {
+                                button.slot = 'inner-target';
+                            }, 80);
+                        });
+                    }, 120);
+                })();
             </script>
         </div>
 
         <!-- Task: Right-click in Web Component slot -->
         <div class="task" id="right-click-component">
             <div class="task-badge"><a href="#right-click-component" id="right-click-component">right-click-component</a></div>
-            <div class="task-title">Right-click the button inside this Web Component slot element</div>
+            <div class="task-title">Right-click the reassigned slotted target whose handler is on a wrapper inside nested shadow DOM</div>
             <right-click-component>
-                <span slot="right-click-target">Right-click me</span>
+                <span slot="waiting-target" data-right-click-target="true">Right-click me</span>
             </right-click-component>
             <script>
-                class RightClickComponent extends HTMLElement {
-                    constructor() {
-                        super();
-                        const shadow = this.attachShadow({ mode: 'open' });
-                        
-                        const wrapper = document.createElement('div');
-                        wrapper.style.padding = '1rem';
-                        wrapper.style.border = '1px solid #ddd';
-                        wrapper.style.borderRadius = '4px';
-                        wrapper.style.backgroundColor = '#f8f9fa';
-                        
-                        const slot = document.createElement('slot');
-                        slot.name = 'right-click-target';
-                        slot.style.cursor = 'context-menu';
-                        slot.style.userSelect = 'none';
-                        slot.style.display = 'inline-block';
-                        slot.style.padding = '0.5rem';
-                        slot.style.backgroundColor = '#e9ecef';
-                        slot.style.borderRadius = '4px';
-                        
-                        wrapper.appendChild(slot);
-                        shadow.appendChild(wrapper);
-                    }
-                }
-                customElements.define('right-click-component', RightClickComponent);
+                (function() {
+                    const taskElement = document.getElementById('right-click-component');
 
-                document.querySelector('[slot="right-click-target"]').addEventListener('contextmenu', function(e) {
-                    e.preventDefault();
-                    this.textContent = 'Right-clicked!';
-                    completeTask(document.getElementById('right-click-component'));
-                });
+                    if (!customElements.get('right-click-closed-gate')) {
+                        customElements.define('right-click-closed-gate', class extends HTMLElement {
+                            connectedCallback() {
+                                if (this.__ready) return;
+                                this.__ready = true;
+                                const shadow = this.attachShadow({ mode: 'closed' });
+                                const style = document.createElement('style');
+                                style.textContent = `
+                                    .gate-wrapper {
+                                        display: inline-block;
+                                        padding: 0.8rem;
+                                        border: 1px solid #ddd;
+                                        border-radius: 4px;
+                                        background-color: #f8f9fa;
+                                    }
+                                    ::slotted(*) {
+                                        cursor: context-menu;
+                                        user-select: none;
+                                        display: inline-block;
+                                        padding: 0.5rem;
+                                        background-color: #e9ecef;
+                                        border-radius: 4px;
+                                    }
+                                `;
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'gate-wrapper';
+                                const slot = document.createElement('slot');
+                                slot.name = 'inner-right-click-target';
+                                wrapper.appendChild(slot);
+                                wrapper.addEventListener('contextmenu', function(event) {
+                                    const clickedTarget = event.composedPath().some(node => node && node.dataset && node.dataset.rightClickTarget === 'true');
+                                    if (!clickedTarget) return;
+                                    event.preventDefault();
+                                    completeTask(taskElement);
+                                });
+                                shadow.append(style, wrapper);
+                            }
+                        });
+                    }
+
+                    class RightClickComponent extends HTMLElement {
+                        connectedCallback() {
+                            if (this.__ready) return;
+                            this.__ready = true;
+                            setTimeout(() => {
+                                const shadow = this.attachShadow({ mode: 'open' });
+                                const wrapper = document.createElement('div');
+                                wrapper.style.padding = '0.7rem';
+                                wrapper.style.border = '1px dashed #94a3b8';
+                                wrapper.style.borderRadius = '5px';
+
+                                const slot = document.createElement('slot');
+                                slot.name = 'right-click-target';
+                                wrapper.appendChild(slot);
+                                shadow.appendChild(wrapper);
+
+                                const gate = document.createElement('right-click-closed-gate');
+                                gate.slot = 'right-click-target';
+                                while (this.firstChild) {
+                                    gate.appendChild(this.firstChild);
+                                }
+                                this.appendChild(gate);
+
+                                requestAnimationFrame(function() {
+                                    const target = gate.querySelector('[data-right-click-target="true"]');
+                                    if (target) {
+                                        target.slot = 'inner-right-click-target';
+                                    }
+                                });
+                            }, 90);
+                        }
+                    }
+                    customElements.define('right-click-component', RightClickComponent);
+                })();
             </script>
         </div>
 
@@ -1663,6 +2061,1285 @@
                 editableDiv.addEventListener('input', function() {
                     if (this.textContent.trim().toLowerCase() === 'banana') {
                         completeTask(document.getElementById('contenteditable-div'));
+                    }
+                });
+            </script>
+        </div>
+
+        <!-- Task: Nested tiny button -->
+        <div class="task" id="nested-tiny-button">
+            <div class="task-badge"><a href="#nested-tiny-button" id="nested-tiny-button">nested-tiny-button</a></div>
+            <div class="task-title">Click the 3px by 3px button buried inside nested scrollers, shadow roots, and iframes</div>
+            <div id="nested-tiny-button-root"></div>
+            <style>
+                #nested-tiny-button-root {
+                    margin: 1rem 0;
+                }
+
+                .nested-tiny-host-shell {
+                    width: min(100%, 560px);
+                    border: 1px solid #c7d2fe;
+                    border-radius: 6px;
+                    padding: 0.75rem;
+                    background: #f8fafc;
+                    box-sizing: border-box;
+                }
+
+                .nested-tiny-complete-note {
+                    display: none;
+                    margin-top: 0.75rem;
+                    color: var(--success-color);
+                    font-weight: 600;
+                }
+
+                #nested-tiny-button.completed .nested-tiny-complete-note {
+                    display: block;
+                }
+            </style>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('nested-tiny-button');
+                    const root = document.getElementById('nested-tiny-button-root');
+                    const challengeId = 'nested-tiny-button-' + Math.random().toString(36).slice(2);
+
+                    function scriptSafeJson(value) {
+                        return JSON.stringify(value).replace(/<\//g, '<\\/');
+                    }
+
+                    const helperCode = `
+                        function randInt(min, max) {
+                            min = Math.ceil(min);
+                            max = Math.floor(max);
+                            if (max <= min) return min;
+                            return Math.floor(Math.random() * (max - min + 1)) + min;
+                        }
+
+                        function createScrollLayer(doc, label, width, height, contentWidth, contentHeight, accent) {
+                            const scroller = doc.createElement('div');
+                            scroller.setAttribute('data-layer-label', label);
+                            scroller.style.cssText = [
+                                'width:' + width + 'px',
+                                'height:' + height + 'px',
+                                'max-width:100%',
+                                'overflow:auto',
+                                'position:relative',
+                                'border:2px solid ' + accent,
+                                'border-radius:5px',
+                                'background:#ffffff',
+                                'box-sizing:border-box',
+                                'scrollbar-gutter:stable',
+                                'overscroll-behavior:contain'
+                            ].join(';');
+
+                            const content = doc.createElement('div');
+                            content.style.cssText = [
+                                'width:' + contentWidth + 'px',
+                                'height:' + contentHeight + 'px',
+                                'position:relative',
+                                'box-sizing:border-box',
+                                'background-color:#f8fafc',
+                                'background-image:linear-gradient(90deg, rgba(71,85,105,.16) 1px, transparent 1px), linear-gradient(rgba(71,85,105,.16) 1px, transparent 1px)',
+                                'background-size:80px 80px'
+                            ].join(';');
+
+                            const tag = doc.createElement('div');
+                            tag.textContent = label;
+                            tag.style.cssText = [
+                                'position:absolute',
+                                'left:8px',
+                                'top:8px',
+                                'font:11px/1.2 monospace',
+                                'color:#334155',
+                                'background:rgba(255,255,255,.86)',
+                                'border:1px solid #cbd5e1',
+                                'border-radius:3px',
+                                'padding:2px 4px'
+                            ].join(';');
+
+                            const pageMarker = doc.createElement('div');
+                            pageMarker.textContent = 'large scroll surface';
+                            pageMarker.style.cssText = [
+                                'position:absolute',
+                                'right:12px',
+                                'bottom:12px',
+                                'font:11px/1.2 monospace',
+                                'color:#64748b'
+                            ].join(';');
+
+                            content.append(tag, pageMarker);
+                            scroller.appendChild(content);
+
+                            const scrollLeft = randInt(Math.max(24, Math.floor(contentWidth * 0.1)), contentWidth - width - 24);
+                            const scrollTop = randInt(Math.max(24, Math.floor(contentHeight * 0.1)), contentHeight - height - 24);
+
+                            return { scroller, content, width, height, scrollLeft, scrollTop };
+                        }
+
+                        function mountVisibleChild(layer, child, childWidth, childHeight, options) {
+                            options = options || {};
+                            const inset = 24;
+                            let visibleX = randInt(inset, Math.max(inset, layer.width - childWidth - inset));
+                            let visibleY = randInt(inset, Math.max(inset, layer.height - childHeight - inset));
+                            const clipAmount = Math.max(1, Math.min(options.clipAmount || 0, Math.floor(Math.min(childWidth, childHeight) / 3)));
+
+                            if (options.clipX === 'left') {
+                                visibleX = -clipAmount;
+                            } else if (options.clipX === 'right') {
+                                visibleX = layer.width - childWidth + clipAmount;
+                            }
+
+                            if (options.clipY === 'top') {
+                                visibleY = -clipAmount;
+                            } else if (options.clipY === 'bottom') {
+                                visibleY = layer.height - childHeight + clipAmount;
+                            }
+
+                            child.style.position = 'absolute';
+                            child.style.left = (layer.scrollLeft + visibleX) + 'px';
+                            child.style.top = (layer.scrollTop + visibleY) + 'px';
+                            child.style.width = childWidth + 'px';
+                            child.style.height = childHeight + 'px';
+                            child.style.boxSizing = 'border-box';
+                            layer.content.appendChild(child);
+                            setLayerScroll(layer);
+                        }
+
+                        function setLayerScroll(layer) {
+                            layer.scroller.scrollLeft = layer.scrollLeft;
+                            layer.scroller.scrollTop = layer.scrollTop;
+                            requestAnimationFrame(function() {
+                                layer.scroller.scrollLeft = layer.scrollLeft;
+                                layer.scroller.scrollTop = layer.scrollTop;
+                            });
+                        }
+
+                        function dataUrl(html) {
+                            let noiseScript = '';
+                            try {
+                                noiseScript = window.__ordinalNoiseScript || '';
+                            } catch (error) {
+                                noiseScript = '';
+                            }
+                            if (!noiseScript) {
+                                try {
+                                    noiseScript = window.top.__ordinalNoiseScript || '';
+                                } catch (error) {
+                                    noiseScript = '';
+                                }
+                            }
+
+                            const htmlWithNoise = noiseScript
+                                ? html.replace(/<head([^>]*)>/i, '<head$1>' + noiseScript)
+                                : html;
+                            return 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlWithNoise);
+                        }
+                    `;
+
+                    const nestedHelpers = Function(helperCode + '; return { createScrollLayer, mountVisibleChild, dataUrl };')();
+                    const createScrollLayer = nestedHelpers.createScrollLayer;
+                    const mountVisibleChild = nestedHelpers.mountVisibleChild;
+                    const dataUrl = nestedHelpers.dataUrl;
+
+                    const deepestFrameHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+    html, body {
+        margin: 0;
+        padding: 5px;
+        background: #eef2ff;
+        font-family: Segoe UI, Tahoma, sans-serif;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+</style>
+</head>
+<body>
+<div id="deep-frame-root"></div>
+<script>
+${helperCode}
+(function() {
+    const challengeId = ${scriptSafeJson(challengeId)};
+    const root = document.getElementById('deep-frame-root');
+    const frameLayer = createScrollLayer(document, 'data iframe layer C', 210, 125, 820, 650, '#f97316');
+    root.appendChild(frameLayer.scroller);
+
+    const openHost = document.createElement('div');
+    openHost.style.display = 'block';
+    const openShadow = openHost.attachShadow({ mode: 'open' });
+    const openLayer = createScrollLayer(document, 'open shadow layer D', 150, 90, 640, 520, '#16a34a');
+    openShadow.appendChild(openLayer.scroller);
+    mountVisibleChild(frameLayer, openHost, 150, 90, { clipX: 'left', clipAmount: 10 });
+
+    const closedHost = document.createElement('div');
+    closedHost.style.display = 'block';
+    const closedShadow = closedHost.attachShadow({ mode: 'closed' });
+    const closedLayer = createScrollLayer(document, 'closed shadow layer E', 95, 60, 480, 360, '#dc2626');
+    closedShadow.appendChild(closedLayer.scroller);
+    mountVisibleChild(openLayer, closedHost, 95, 60);
+
+    const target = document.createElement('button');
+    target.id = 'deep-tiny-button';
+    target.type = 'button';
+    target.setAttribute('aria-label', '3 pixel target');
+    target.title = '3 pixel target';
+    target.style.cssText = [
+        'position:absolute',
+        'width:3px',
+        'height:3px',
+        'min-width:3px',
+        'min-height:3px',
+        'padding:0',
+        'margin:0',
+        'border:0',
+        'border-radius:0',
+        'background:#e11d48',
+        'color:transparent',
+        'font-size:0',
+        'line-height:0',
+        'overflow:hidden',
+        'cursor:pointer',
+        'appearance:none'
+    ].join(';');
+    target.addEventListener('click', function() {
+        alert('Deep iframe alert: acknowledge this before the parent page can finish the task.');
+        window.top.postMessage({ type: 'nested-tiny-button-clicked', challengeId }, '*');
+    });
+    mountVisibleChild(closedLayer, target, 3, 3);
+})();
+<\/script>
+</body>
+</html>`;
+
+                    const middleFrameHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+    html, body {
+        margin: 0;
+        padding: 6px;
+        background: #f1f5f9;
+        font-family: Segoe UI, Tahoma, sans-serif;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    iframe {
+        border: 2px solid #0284c7;
+        border-radius: 4px;
+        background: white;
+    }
+</style>
+</head>
+<body>
+<div id="middle-frame-root"></div>
+<script>
+${helperCode}
+(function() {
+    const root = document.getElementById('middle-frame-root');
+    const deepestFrameHtml = ${scriptSafeJson(deepestFrameHtml)};
+    const frameLayer = createScrollLayer(document, 'data iframe layer A', 330, 210, 1200, 980, '#7c3aed');
+    root.appendChild(frameLayer.scroller);
+
+    const closedHost = document.createElement('div');
+    closedHost.style.display = 'block';
+    const closedShadow = closedHost.attachShadow({ mode: 'closed' });
+    const closedLayer = createScrollLayer(document, 'closed shadow layer B', 270, 170, 980, 820, '#0891b2');
+    closedShadow.appendChild(closedLayer.scroller);
+    mountVisibleChild(frameLayer, closedHost, 270, 170, { clipX: 'right', clipAmount: 14 });
+
+    const iframe = document.createElement('iframe');
+    iframe.title = 'Nested data URL iframe containing the 3px target';
+    iframe.src = dataUrl(deepestFrameHtml);
+    mountVisibleChild(closedLayer, iframe, 230, 140, { clipX: 'left', clipAmount: 12 });
+})();
+<\/script>
+</body>
+</html>`;
+
+                    root.innerHTML = '<div class="nested-tiny-host-shell" id="nested-tiny-host-shell"></div><div class="nested-tiny-complete-note">Tiny target clicked.</div>';
+
+                    const shell = document.getElementById('nested-tiny-host-shell');
+                    const outerLayer = createScrollLayer(document, 'page scroll layer', 520, 320, 1700, 1400, '#4f46e5');
+                    shell.appendChild(outerLayer.scroller);
+
+                    const openHost = document.createElement('div');
+                    openHost.style.display = 'block';
+                    const openShadow = openHost.attachShadow({ mode: 'open' });
+                    const openLayer = createScrollLayer(document, 'open shadow layer', 430, 270, 1450, 1200, '#2563eb');
+                    openShadow.appendChild(openLayer.scroller);
+                    mountVisibleChild(outerLayer, openHost, 430, 270, { clipX: 'left', clipAmount: 18 });
+
+                    const iframe = document.createElement('iframe');
+                    iframe.title = 'Nested data URL iframe';
+                    iframe.style.border = '2px solid #9333ea';
+                    iframe.style.borderRadius = '4px';
+                    iframe.style.background = '#ffffff';
+                    iframe.src = dataUrl(middleFrameHtml);
+                    mountVisibleChild(openLayer, iframe, 360, 230, { clipX: 'right', clipAmount: 20 });
+
+                    window.addEventListener('message', function(event) {
+                        if (!event.data || event.data.type !== 'nested-tiny-button-clicked' || event.data.challengeId !== challengeId) {
+                            return;
+                        }
+                        completeTask(taskElement);
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: Wrapped word click -->
+        <div class="task" id="wrapped-word-click">
+            <div class="task-badge"><a href="#wrapped-word-click" id="wrapped-word-click">wrapped-word-click</a></div>
+            <div class="task-title">Click the word "ox" where it wraps across two lines in this paragraph</div>
+            <p id="wrapped-word-paragraph">Marker xxxxxxxxxxxxxxxxx&nbsp;ox trailing.</p>
+            <div id="wrapped-word-status" aria-live="polite"></div>
+            <style>
+                #wrapped-word-paragraph {
+                    width: 120px;
+                    max-width: 100%;
+                    padding: 0.85rem;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    background: #f8fafc;
+                    font-size: 18px;
+                    line-height: 1.35;
+                    overflow-wrap: anywhere;
+                    word-break: break-all;
+                    hyphens: none;
+                    cursor: crosshair;
+                    user-select: none;
+                }
+
+                #wrapped-word-status {
+                    min-height: 1.5rem;
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            </style>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('wrapped-word-click');
+                    const paragraph = document.getElementById('wrapped-word-paragraph');
+                    const status = document.getElementById('wrapped-word-status');
+                    const targetWord = 'ox';
+                    const fullText = paragraph.textContent;
+                    const targetStart = fullText.indexOf(targetWord);
+                    const targetEnd = targetStart + targetWord.length;
+                    const wordPattern = /[A-Za-z]/;
+
+                    function getCaretFromPoint(x, y) {
+                        if (document.caretPositionFromPoint) {
+                            const position = document.caretPositionFromPoint(x, y);
+                            if (position && paragraph.contains(position.offsetNode)) {
+                                return { node: position.offsetNode, offset: position.offset };
+                            }
+                        }
+
+                        if (document.caretRangeFromPoint) {
+                            const range = document.caretRangeFromPoint(x, y);
+                            if (range && paragraph.contains(range.startContainer)) {
+                                return { node: range.startContainer, offset: range.startOffset };
+                            }
+                        }
+
+                        return null;
+                    }
+
+                    function absoluteOffsetFor(node, offset) {
+                        const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+                        let absoluteOffset = 0;
+                        let current;
+                        while ((current = walker.nextNode())) {
+                            if (current === node) {
+                                return absoluteOffset + offset;
+                            }
+                            absoluteOffset += current.textContent.length;
+                        }
+                        return -1;
+                    }
+
+                    function wordAtOffset(offset) {
+                        if (offset < 0) return '';
+                        let index = Math.min(offset, fullText.length - 1);
+                        if (!wordPattern.test(fullText[index]) && index > 0) {
+                            index--;
+                        }
+                        if (!wordPattern.test(fullText[index])) {
+                            return '';
+                        }
+
+                        let start = index;
+                        let end = index + 1;
+                        while (start > 0 && wordPattern.test(fullText[start - 1])) {
+                            start--;
+                        }
+                        while (end < fullText.length && wordPattern.test(fullText[end])) {
+                            end++;
+                        }
+                        return fullText.slice(start, end);
+                    }
+
+                    function pointIsInsideTargetWord(x, y) {
+                        const textNode = paragraph.firstChild;
+                        const range = document.createRange();
+                        range.setStart(textNode, targetStart);
+                        range.setEnd(textNode, targetEnd);
+                        const rects = Array.from(range.getClientRects());
+                        range.detach();
+                        return rects.some(rect => (
+                            x >= rect.left - 1 &&
+                            x <= rect.right + 1 &&
+                            y >= rect.top - 1 &&
+                            y <= rect.bottom + 1
+                        ));
+                    }
+
+                    paragraph.addEventListener('click', function(event) {
+                        const caret = getCaretFromPoint(event.clientX, event.clientY);
+                        const offset = caret ? absoluteOffsetFor(caret.node, caret.offset) : -1;
+                        const clickedWord = wordAtOffset(offset);
+                        status.textContent = clickedWord ? 'Clicked: ' + clickedWord : 'Clicked outside a word';
+
+                        if (clickedWord === targetWord && pointIsInsideTargetWord(event.clientX, event.clientY)) {
+                            completeTask(taskElement);
+                        }
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: Long link maze -->
+        <div class="task" id="long-link-maze">
+            <div class="task-badge"><a href="#long-link-maze" id="long-link-maze">long-link-maze</a></div>
+            <div class="task-title">Click the extremely long link containing the token TARGET-LINK::orion-needle-1847</div>
+            <div id="long-link-maze-list" aria-label="Hundreds of long links"></div>
+            <div id="long-link-maze-status" aria-live="polite"></div>
+            <style>
+                #long-link-maze-list {
+                    height: 280px;
+                    overflow: auto;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    background: #f8fafc;
+                    padding: 0.75rem;
+                    box-sizing: border-box;
+                }
+
+                #long-link-maze-list a {
+                    display: block;
+                    margin: 0 0 0.45rem;
+                    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+                    font-size: 12px;
+                    line-height: 1.35;
+                    white-space: nowrap;
+                    color: #1d4ed8;
+                }
+
+                #long-link-maze-status {
+                    min-height: 1.5rem;
+                    margin-top: 0.5rem;
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            </style>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('long-link-maze');
+                    const list = document.getElementById('long-link-maze-list');
+                    const status = document.getElementById('long-link-maze-status');
+                    const targetToken = 'TARGET-LINK::orion-needle-1847';
+                    const targetIndex = 347;
+                    const weird = '~!@$%^&*()_+-=[]{}|;:,.<>?';
+
+                    function fragment(seed, length) {
+                        let out = '';
+                        for (let i = 0; i < length; i++) {
+                            const code = (seed * 31 + i * 17 + (i % 7) * 19) % 36;
+                            out += code < 10 ? String(code) : String.fromCharCode(87 + code);
+                            if (i % 9 === 8) out += weird[(seed + i) % weird.length];
+                        }
+                        return out;
+                    }
+
+                    function longHref(index, token) {
+                        const params = [];
+                        for (let i = 0; i < 18; i++) {
+                            params.push(
+                                'param_' + index + '_' + i + '=' +
+                                encodeURIComponent(fragment(index + i * 13, 44) + weird[(index + i) % weird.length] + fragment(index * 3 + i, 28))
+                            );
+                        }
+                        params.splice(9, 0, 'verificationToken=' + encodeURIComponent(token || fragment(index * 11, 60)));
+                        return 'https://example.invalid/context/link/' + index + '/' + fragment(index, 32) + '?' + params.join('&') + '#hash=' + encodeURIComponent(fragment(index * 7, 130));
+                    }
+
+                    const linkCount = 560;
+                    const fragmentNode = document.createDocumentFragment();
+                    for (let i = 0; i < linkCount; i++) {
+                        const isTarget = i === targetIndex;
+                        const token = isTarget ? targetToken : 'DECOY-LINK::' + fragment(i * 5 + 3, 24);
+                        const link = document.createElement('a');
+                        link.href = longHref(i, token);
+                        link.textContent = [
+                            'link-index=' + String(i).padStart(3, '0'),
+                            'route=' + fragment(i + 100, 70),
+                            'token=' + token,
+                            'query=' + fragment(i + 200, 95),
+                            'hash=' + fragment(i + 300, 115)
+                        ].join(' ;; ');
+                        link.addEventListener('click', function(event) {
+                            event.preventDefault();
+                            if (isTarget) {
+                                status.textContent = 'Correct link clicked.';
+                                completeTask(taskElement);
+                            } else {
+                                status.textContent = 'Wrong long link: index ' + i;
+                            }
+                        });
+                        fragmentNode.appendChild(link);
+                    }
+                    list.appendChild(fragmentNode);
+                })();
+            </script>
+        </div>
+
+        <!-- Task: Wall text secret word -->
+        <div class="task" id="wall-secret-word">
+            <div class="task-badge"><a href="#wall-secret-word" id="wall-secret-word">wall-secret-word</a></div>
+            <div class="task-title">Find the word immediately after ANCHORWORD-7429 in the huge scrollable text and type it below</div>
+            <div id="wall-secret-text" aria-label="Huge scrollable wall of text"></div>
+            <input type="text" id="wall-secret-input" placeholder="Secret word">
+            <div id="wall-secret-status" aria-live="polite"></div>
+            <style>
+                #wall-secret-text {
+                    height: 260px;
+                    overflow: auto;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    background: #f8fafc;
+                    padding: 1rem;
+                    margin-bottom: 0.75rem;
+                    box-sizing: border-box;
+                    white-space: pre-wrap;
+                    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+                    font-size: 12px;
+                    line-height: 1.55;
+                }
+
+                #wall-secret-status {
+                    min-height: 1.5rem;
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            </style>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('wall-secret-word');
+                    const wall = document.getElementById('wall-secret-text');
+                    const input = document.getElementById('wall-secret-input');
+                    const status = document.getElementById('wall-secret-status');
+                    const anchor = 'ANCHORWORD-7429';
+                    const secret = 'cobaltglass';
+                    const syllables = ['transit', 'lumen', 'archive', 'vector', 'syntax', 'delta', 'parallax', 'matrix', 'signal', 'cipher', 'orbit', 'cascade', 'threshold', 'packet', 'index', 'glyph'];
+
+                    function longWord(seed) {
+                        const parts = [];
+                        for (let i = 0; i < 5; i++) {
+                            parts.push(syllables[(seed * 7 + i * 11) % syllables.length]);
+                        }
+                        return parts.join('-') + '-' + String(seed * 7919).padStart(7, '0');
+                    }
+
+                    const paragraphs = [];
+                    for (let p = 0; p < 180; p++) {
+                        const words = [];
+                        for (let w = 0; w < 54; w++) {
+                            words.push(longWord(p * 97 + w));
+                        }
+                        if (p === 113) {
+                            words.splice(31, 0, anchor, secret);
+                        }
+                        paragraphs.push(words.join(' ') + '.');
+                    }
+                    wall.textContent = paragraphs.join('\\n\\n');
+
+                    input.addEventListener('input', function() {
+                        const value = input.value.trim().toLowerCase();
+                        if (value === secret) {
+                            status.textContent = 'Secret word accepted.';
+                            completeTask(taskElement);
+                        } else {
+                            status.textContent = value ? 'Keep searching.' : '';
+                        }
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: Closed shadow aria tree -->
+        <div class="task" id="closed-shadow-aria-word">
+            <div class="task-badge"><a href="#closed-shadow-aria-word" id="closed-shadow-aria-word">closed-shadow-aria-word</a></div>
+            <div class="task-title">Find the word after "closed-shadow-secret-word =>" inside the closed shadow ARIA tree and type it below</div>
+            <div id="closed-shadow-aria-host"></div>
+            <input type="text" id="closed-shadow-aria-input" placeholder="Secret word">
+            <div id="closed-shadow-aria-status" aria-live="polite"></div>
+            <style>
+                #closed-shadow-aria-host {
+                    margin-bottom: 0.75rem;
+                }
+
+                #closed-shadow-aria-status {
+                    min-height: 1.5rem;
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            </style>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('closed-shadow-aria-word');
+                    const host = document.getElementById('closed-shadow-aria-host');
+                    const input = document.getElementById('closed-shadow-aria-input');
+                    const status = document.getElementById('closed-shadow-aria-status');
+                    const shadow = host.attachShadow({ mode: 'closed' });
+                    const secret = 'violetcircuit';
+                    const roleValues = ['treeitem', 'menuitemcheckbox', 'presentation', 'alertdialog', 'rowheader', 'gridcell', 'totally-not-a-role', 'button listbox', 'document'];
+                    const attrNames = ['aria-label', 'aria-description', 'aria-roledescription', 'aria-controls', 'aria-owns', 'aria-describedby', 'aria-invalid', 'aria-expanded', 'aria-busy', 'aria-level', 'data-context-payload'];
+                    const chunks = ['orion', 'malformed', 'recursive', 'navigation', 'phantom', 'breadcrumb', 'tabpanel', 'overspecified', 'attribute', 'labyrinth', 'semantic', 'overflow'];
+
+                    function payload(seed, count) {
+                        const parts = [];
+                        for (let i = 0; i < count; i++) {
+                            parts.push(chunks[(seed * 13 + i * 5) % chunks.length] + '-' + String(seed * 104729 + i * 1543));
+                        }
+                        return parts.join('::');
+                    }
+
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .aria-shell {
+                            height: 285px;
+                            overflow: auto;
+                            border: 1px solid #cbd5e1;
+                            border-radius: 6px;
+                            background: #f8fafc;
+                            padding: 0.8rem;
+                            box-sizing: border-box;
+                            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+                            font-size: 12px;
+                            line-height: 1.45;
+                        }
+                        .aria-node {
+                            margin: 0 0 0.4rem;
+                            padding-left: 0.6rem;
+                            border-left: 2px solid #cbd5e1;
+                            color: #334155;
+                        }
+                        .secret-node {
+                            color: #991b1b;
+                            font-weight: 700;
+                        }
+                    `;
+
+                    const shell = document.createElement('div');
+                    shell.className = 'aria-shell';
+                    shell.setAttribute('role', 'tree grid menu listbox');
+                    shell.setAttribute('aria-label', payload(500, 36));
+                    shell.setAttribute('aria-activedescendant', 'missing-' + payload(501, 8));
+                    shell.setAttribute('aria-expanded', 'sideways');
+                    shell.setAttribute('aria-level', 'deep-ish');
+
+                    const fragment = document.createDocumentFragment();
+                    for (let i = 0; i < 260; i++) {
+                        const node = document.createElement(i % 9 === 0 ? 'section' : 'div');
+                        node.className = 'aria-node';
+                        node.setAttribute('role', roleValues[i % roleValues.length]);
+                        node.setAttribute('tabindex', i % 5 === 0 ? '0' : '-1');
+                        for (let a = 0; a < attrNames.length; a++) {
+                            const value = payload(i * 17 + a, 10 + (a % 4));
+                            node.setAttribute(attrNames[a], value);
+                        }
+                        node.setAttribute('aria-hidden', i % 17 === 0 ? 'almost' : 'false');
+                        node.setAttribute('aria-selected', i % 19 === 0 ? 'sometimes' : 'false');
+                        node.setAttribute('aria-checked', i % 23 === 0 ? 'banana' : 'mixed');
+
+                        if (i === 191) {
+                            node.classList.add('secret-node');
+                            node.textContent = 'closed-shadow-secret-word => ' + secret + ' :: ' + payload(i, 18);
+                        } else {
+                            node.textContent = 'aria-node-' + String(i).padStart(3, '0') + ' :: ' + payload(i, 26);
+                        }
+                        fragment.appendChild(node);
+                    }
+                    shell.appendChild(fragment);
+                    shadow.append(style, shell);
+
+                    input.addEventListener('input', function() {
+                        const value = input.value.trim().toLowerCase();
+                        if (value === secret) {
+                            status.textContent = 'Closed shadow word accepted.';
+                            completeTask(taskElement);
+                        } else {
+                            status.textContent = value ? 'Not the closed shadow word.' : '';
+                        }
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: Dynamic frame ordinal trap -->
+        <div class="task" id="dynamic-frame-ordinal-trap">
+            <div class="task-badge"><a href="#dynamic-frame-ordinal-trap" id="dynamic-frame-ordinal-trap">dynamic-frame-ordinal-trap</a></div>
+            <div class="task-title">Click the buttons in order as they dynamically create buttons and iframes across frames</div>
+            <button id="frame-trap-start">Create the first two frames</button>
+            <div id="frame-trap-stage" aria-label="Dynamic iframe challenge stage"></div>
+            <div id="frame-trap-status" aria-live="polite"></div>
+            <style>
+                #frame-trap-stage {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 0.75rem;
+                    margin-top: 1rem;
+                }
+
+                #frame-trap-stage iframe {
+                    width: 100%;
+                    height: 180px;
+                    border: 1px solid #94a3b8;
+                    border-radius: 6px;
+                    background: #ffffff;
+                    box-sizing: border-box;
+                }
+
+                #frame-trap-status {
+                    min-height: 1.5rem;
+                    margin-top: 0.75rem;
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            </style>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('dynamic-frame-ordinal-trap');
+                    const startButton = document.getElementById('frame-trap-start');
+                    const stage = document.getElementById('frame-trap-stage');
+                    const status = document.getElementById('frame-trap-status');
+                    let step = 0;
+                    let firstFrame = null;
+                    let secondFrame = null;
+                    let thirdFrame = null;
+
+                    function setStatus(message) {
+                        status.textContent = message;
+                    }
+
+                    function frameDocument(frame) {
+                        return frame.contentDocument || frame.contentWindow.document;
+                    }
+
+                    function writeFrame(frame, title, bodyHtml) {
+                        const doc = frameDocument(frame);
+                        doc.open();
+                        doc.write(`<!DOCTYPE html>
+                            <html lang="en">
+                            <head>
+                                <meta charset="UTF-8">
+                                <style>
+                                    body {
+                                        margin: 0;
+                                        padding: 12px;
+                                        font-family: Segoe UI, Tahoma, sans-serif;
+                                        color: #334155;
+                                        background: #f8fafc;
+                                    }
+
+                                    .label {
+                                        font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                                        color: #64748b;
+                                        margin-bottom: 8px;
+                                    }
+
+                                    button {
+                                        background: #4a6bff;
+                                        color: #fff;
+                                        border: 0;
+                                        border-radius: 4px;
+                                        padding: 0.45rem 0.65rem;
+                                        cursor: pointer;
+                                    }
+
+                                    iframe {
+                                        width: 100%;
+                                        height: 92px;
+                                        margin-top: 10px;
+                                        border: 1px dashed #7c3aed;
+                                        border-radius: 5px;
+                                        background: #fff;
+                                        box-sizing: border-box;
+                                    }
+                                </style>
+                            </head>
+                            <body>
+                                <div class="label">${title}</div>
+                                ${bodyHtml}
+                            </body>
+                            </html>`);
+                        doc.close();
+                        return doc;
+                    }
+
+                    function createFrame(id, title, bodyHtml) {
+                        const frame = document.createElement('iframe');
+                        frame.id = id;
+                        frame.name = id + '-' + Math.random().toString(36).slice(2);
+                        frame.title = title;
+                        frame.src = 'about:blank';
+                        stage.appendChild(frame);
+                        writeFrame(frame, title, bodyHtml);
+                        return frame;
+                    }
+
+                    function resetFrames() {
+                        stage.textContent = '';
+                        firstFrame = null;
+                        secondFrame = null;
+                        thirdFrame = null;
+                    }
+
+                    function addFinalButtonToSecondFrame() {
+                        const doc = frameDocument(secondFrame);
+                        if (doc.getElementById('frame-trap-final-button')) {
+                            return;
+                        }
+                        const note = doc.createElement('p');
+                        note.textContent = 'A button was inserted into this older sibling frame by the nested frame in the first sibling.';
+                        const finalButton = doc.createElement('button');
+                        finalButton.id = 'frame-trap-final-button';
+                        finalButton.type = 'button';
+                        finalButton.textContent = 'Finish from the second frame';
+                        finalButton.addEventListener('click', function() {
+                            if (step !== 3) {
+                                setStatus('Wrong order. Start over.');
+                                step = 0;
+                                resetFrames();
+                                startButton.disabled = false;
+                                return;
+                            }
+                            step = 4;
+                            setStatus('Dynamic frame order completed.');
+                            completeTask(taskElement);
+                        });
+                        doc.body.append(note, finalButton);
+                    }
+
+                    function addThirdFrameInsideFirstFrame() {
+                        if (step !== 2) {
+                            setStatus('Wrong order. Start over.');
+                            step = 0;
+                            resetFrames();
+                            startButton.disabled = false;
+                            return;
+                        }
+                        step = 3;
+                        const firstDoc = frameDocument(firstFrame);
+                        if (firstDoc.getElementById('frame-trap-third-frame')) {
+                            return;
+                        }
+                        thirdFrame = firstDoc.createElement('iframe');
+                        thirdFrame.id = 'frame-trap-third-frame';
+                        thirdFrame.name = 'third-frame-created-inside-first-' + Math.random().toString(36).slice(2);
+                        thirdFrame.title = 'Third frame created inside the first frame';
+                        thirdFrame.src = 'about:blank';
+                        firstDoc.body.appendChild(thirdFrame);
+                        const thirdDoc = thirdFrame.contentDocument || thirdFrame.contentWindow.document;
+                        thirdDoc.open();
+                        thirdDoc.write(`<!DOCTYPE html>
+                            <html lang="en">
+                            <head>
+                                <meta charset="UTF-8">
+                                <style>
+                                    body {
+                                        margin: 0;
+                                        padding: 10px;
+                                        font-family: Segoe UI, Tahoma, sans-serif;
+                                        background: #faf5ff;
+                                        color: #581c87;
+                                    }
+
+                                    button {
+                                        background: #7c3aed;
+                                        color: white;
+                                        border: 0;
+                                        border-radius: 4px;
+                                        padding: 0.4rem 0.6rem;
+                                        cursor: pointer;
+                                    }
+                                </style>
+                            </head>
+                            <body>
+                                <button id="frame-trap-insert-final" type="button">Insert final button into the second frame</button>
+                            </body>
+                            </html>`);
+                        thirdDoc.close();
+                        thirdDoc.getElementById('frame-trap-insert-final').addEventListener('click', function() {
+                            addFinalButtonToSecondFrame();
+                            setStatus('Final button added back into the second frame.');
+                        });
+                        setStatus('Third frame added inside the first frame. Use it to mutate the second frame.');
+                    }
+
+                    startButton.addEventListener('click', function() {
+                        if (step !== 0) {
+                            setStatus('Wrong order. Start over.');
+                            step = 0;
+                            resetFrames();
+                            startButton.disabled = false;
+                            return;
+                        }
+                        resetFrames();
+                        step = 1;
+                        startButton.disabled = true;
+                        firstFrame = createFrame(
+                            'frame-trap-first-frame',
+                            'Frame 1: old sibling, currently no action button',
+                            '<p>This first frame starts quiet. Later, the second frame will insert a third frame here.</p>'
+                        );
+                        secondFrame = createFrame(
+                            'frame-trap-second-frame',
+                            'Frame 2: click here next',
+                            '<button id="frame-trap-create-third" type="button">Create the third frame inside the first frame</button>'
+                        );
+                        frameDocument(secondFrame).getElementById('frame-trap-create-third').addEventListener('click', function() {
+                            if (step !== 1) {
+                                setStatus('Wrong order. Start over.');
+                                step = 0;
+                                resetFrames();
+                                startButton.disabled = false;
+                                return;
+                            }
+                            step = 2;
+                            stage.insertBefore(secondFrame, firstFrame);
+                            addThirdFrameInsideFirstFrame();
+                        });
+                        setStatus('Two sibling frames added. Click the button inside the second frame.');
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: Rotated transform target -->
+        <div class="task" id="rotated-transform-click">
+            <div class="task-badge"><a href="#rotated-transform-click" id="rotated-transform-click">rotated-transform-click</a></div>
+            <div class="task-title">Click the rotated button, using its visible transformed shape rather than an unrotated rectangle</div>
+            <div class="rotated-transform-stage">
+                <div id="rotated-untransformed-trap" aria-hidden="true"></div>
+                <button id="rotated-transform-button" type="button">Rotated Target</button>
+            </div>
+            <div id="rotated-transform-status" aria-live="polite"></div>
+            <style>
+                .rotated-transform-stage {
+                    height: 220px;
+                    position: relative;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    background:
+                        linear-gradient(90deg, rgba(148, 163, 184, 0.3) 1px, transparent 1px),
+                        linear-gradient(rgba(148, 163, 184, 0.3) 1px, transparent 1px);
+                    background-size: 24px 24px;
+                    overflow: hidden;
+                }
+
+                #rotated-untransformed-trap {
+                    position: absolute;
+                    left: 68px;
+                    top: 58px;
+                    width: 132px;
+                    height: 30px;
+                    background: rgba(0, 0, 0, 0);
+                    z-index: 2;
+                }
+
+                #rotated-transform-button {
+                    position: absolute;
+                    left: 68px;
+                    top: 58px;
+                    width: 132px;
+                    height: 30px;
+                    padding: 0;
+                    transform: translate(210px, 72px) rotate(27deg);
+                    transform-origin: 18px 15px;
+                    z-index: 3;
+                }
+
+                #rotated-transform-status {
+                    min-height: 1.5rem;
+                    margin-top: 0.5rem;
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            </style>
+            <script>
+                const rotatedTransformButton = document.getElementById('rotated-transform-button');
+                const rotatedTransformStatus = document.getElementById('rotated-transform-status');
+
+                document.getElementById('rotated-untransformed-trap').addEventListener('click', function() {
+                    rotatedTransformStatus.textContent = 'Wrong box: that was the untransformed layout position.';
+                });
+
+                rotatedTransformButton.addEventListener('click', function(event) {
+                    const rect = this.getBoundingClientRect();
+                    const insideTranslatedBox = event.clientX >= rect.left &&
+                        event.clientX <= rect.right &&
+                        event.clientY >= rect.top &&
+                        event.clientY <= rect.bottom;
+                    if (!insideTranslatedBox) return;
+                    rotatedTransformStatus.textContent = 'Transformed target accepted.';
+                    completeTask(document.getElementById('rotated-transform-click'));
+                });
+            </script>
+        </div>
+
+        <!-- Task: Transparent overlay button -->
+        <div class="task" id="transparent-overlay-button">
+            <div class="task-badge"><a href="#transparent-overlay-button" id="transparent-overlay-button">transparent-overlay-button</a></div>
+            <div class="task-title">Click the button covered by barely visible cursor-neutral overlays</div>
+            <div class="overlay-button-stage">
+                <button id="transparent-overlay-target" type="button">Click Through Overlays</button>
+                <div class="overlay-stripe overlay-one"></div>
+                <div class="overlay-stripe overlay-two"></div>
+                <div class="overlay-stripe overlay-three"></div>
+            </div>
+            <div id="transparent-overlay-status" aria-live="polite"></div>
+            <style>
+                .overlay-button-stage {
+                    position: relative;
+                    width: 320px;
+                    height: 130px;
+                    max-width: 100%;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    background: #f8fafc;
+                }
+
+                #transparent-overlay-target {
+                    position: absolute;
+                    left: 58px;
+                    top: 42px;
+                    width: 190px;
+                    height: 44px;
+                }
+
+                .overlay-stripe {
+                    position: absolute;
+                    pointer-events: auto;
+                    cursor: default;
+                    opacity: 0.01;
+                    background: #000;
+                    border: 8px solid #000;
+                    z-index: 3;
+                }
+
+                .overlay-one {
+                    left: 40px;
+                    top: 26px;
+                    width: 225px;
+                    height: 24px;
+                    transform: rotate(-8deg);
+                }
+
+                .overlay-two {
+                    left: 92px;
+                    top: 31px;
+                    width: 58px;
+                    height: 82px;
+                    transform: rotate(12deg);
+                }
+
+                .overlay-three {
+                    left: 135px;
+                    top: 58px;
+                    width: 170px;
+                    height: 28px;
+                    transform: rotate(5deg);
+                }
+
+                #transparent-overlay-status {
+                    min-height: 1.5rem;
+                    margin-top: 0.5rem;
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            </style>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('transparent-overlay-button');
+                    const target = document.getElementById('transparent-overlay-target');
+                    const stage = document.querySelector('#transparent-overlay-button .overlay-button-stage');
+                    const status = document.getElementById('transparent-overlay-status');
+
+                    stage.addEventListener('click', function(event) {
+                        const rect = target.getBoundingClientRect();
+                        const hitTargetArea = event.clientX >= rect.left &&
+                            event.clientX <= rect.right &&
+                            event.clientY >= rect.top &&
+                            event.clientY <= rect.bottom;
+
+                        if (!hitTargetArea) {
+                            status.textContent = 'Click was outside the button area.';
+                            return;
+                        }
+
+                        status.textContent = 'Overlay-covered button area accepted.';
+                        completeTask(taskElement);
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: Realistic interaction sequence -->
+        <div class="task" id="realistic-input-sequence">
+            <div class="task-badge"><a href="#realistic-input-sequence" id="realistic-input-sequence">realistic-input-sequence</a></div>
+            <div class="task-title">Realistically scroll the panel, type "orchid", then click Submit with full human-like event sequences</div>
+            <div id="realistic-scroll-panel" tabindex="0">
+                <p>Start here, then scroll downward with wheel-like input until the final marker is visible.</p>
+                <p>Repeated filler text creates enough distance for a real scroll gesture to produce both wheel and scroll events.</p>
+                <p>Keep scrolling. Programmatic scroll position changes without wheel events do not count for this task.</p>
+                <p>More filler. More filler. More filler. More filler. More filler. More filler. More filler.</p>
+                <p>Almost there. The task checks the event sequence, not only the final visual state.</p>
+                <p id="realistic-scroll-marker">Final marker reached.</p>
+            </div>
+            <input id="realistic-type-input" type="text" placeholder="Type orchid">
+            <button id="realistic-submit-button" type="button">Submit</button>
+            <div id="realistic-sequence-status" aria-live="polite"></div>
+            <style>
+                #realistic-scroll-panel {
+                    width: min(100%, 420px);
+                    height: 115px;
+                    overflow: auto;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    padding: 0.75rem;
+                    margin-bottom: 0.75rem;
+                    background: #f8fafc;
+                }
+
+                #realistic-type-input {
+                    margin-right: 0.5rem;
+                }
+
+                #realistic-sequence-status {
+                    min-height: 1.5rem;
+                    margin-top: 0.5rem;
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            </style>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('realistic-input-sequence');
+                    const panel = document.getElementById('realistic-scroll-panel');
+                    const input = document.getElementById('realistic-type-input');
+                    const button = document.getElementById('realistic-submit-button');
+                    const status = document.getElementById('realistic-sequence-status');
+                    const targetText = 'orchid';
+                    const state = {
+                        wheelSeen: false,
+                        scrollSeen: false,
+                        typed: '',
+                        keySequence: [],
+                        pointerSequence: []
+                    };
+
+                    panel.addEventListener('wheel', function() {
+                        state.wheelSeen = true;
+                    }, { passive: true });
+
+                    panel.addEventListener('scroll', function() {
+                        if (state.wheelSeen && panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 4) {
+                            state.scrollSeen = true;
+                        }
+                    });
+
+                    ['keydown', 'beforeinput', 'input', 'keyup'].forEach(function(type) {
+                        input.addEventListener(type, function(event) {
+                            state.keySequence.push(type);
+                            if (type === 'input') {
+                                state.typed = input.value;
+                            }
+                        });
+                    });
+
+                    ['pointerover', 'pointermove', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function(type) {
+                        button.addEventListener(type, function() {
+                            state.pointerSequence.push(type);
+                        });
+                    });
+
+                    function hasOrderedSequence(haystack, needle) {
+                        let index = 0;
+                        return haystack.some(function(item) {
+                            if (item === needle[index]) {
+                                index++;
+                            }
+                            return index === needle.length;
+                        });
+                    }
+
+                    button.addEventListener('click', function() {
+                        const typedWithHumanEvents = state.typed === targetText &&
+                            hasOrderedSequence(state.keySequence, ['keydown', 'beforeinput', 'input', 'keyup']) &&
+                            state.keySequence.filter(type => type === 'input').length >= targetText.length;
+                        const clickedLikeHuman = hasOrderedSequence(state.pointerSequence, ['pointerover', 'pointermove', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+
+                        if (state.scrollSeen && typedWithHumanEvents && clickedLikeHuman) {
+                            status.textContent = 'Realistic sequence accepted.';
+                            completeTask(taskElement);
+                        } else {
+                            status.textContent = 'Missing realistic scroll, type, or click event sequence.';
+                        }
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: CSS generated text instruction -->
+        <div class="task" id="css-transform-text">
+            <div class="task-badge"><a href="#css-transform-text" id="css-transform-text">css-transform-text</a></div>
+            <div class="task-title">Follow the visible CSS-generated instruction, not the DOM text instruction</div>
+            <p id="css-transform-visible-instruction">type copper into the field</p>
+            <input id="css-transform-text-input" type="text" placeholder="Visible instruction answer">
+            <style>
+                #css-transform-visible-instruction {
+                    font-size: 0;
+                    margin: 0 0 0.75rem;
+                }
+
+                #css-transform-visible-instruction::before {
+                    content: "type ";
+                    font-size: 1rem;
+                    text-transform: uppercase;
+                }
+
+                #css-transform-visible-instruction::after {
+                    content: " skyline into the field";
+                    font-size: 1rem;
+                    text-transform: uppercase;
+                }
+            </style>
+            <script>
+                document.getElementById('css-transform-text-input').addEventListener('input', function() {
+                    if (this.value.trim().toLowerCase() === 'skyline') {
+                        completeTask(document.getElementById('css-transform-text'));
                     }
                 });
             </script>
