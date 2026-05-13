@@ -352,6 +352,93 @@
             padding: 0 1rem;
         }
 
+        .hard-mode-panel {
+            max-width: 800px;
+            margin: 1.5rem auto 0;
+            padding: 1rem;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: var(--box-shadow);
+        }
+
+        .hard-mode-panel h2 {
+            margin: 0 0 0.75rem;
+            font-size: 1.1rem;
+            text-transform: lowercase;
+        }
+
+        .hard-mode-options {
+            display: grid;
+            gap: 0.6rem;
+        }
+
+        .hard-mode-options label {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .hard-mode-options input {
+            flex: 0 0 auto;
+            margin-top: 0.35rem;
+        }
+
+        .task-shell {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .task-shell > .task,
+        .task-shell .hard-mode-layer > .task {
+            margin-bottom: 0;
+        }
+
+        .task-shell.hard-mode-offset {
+            transform: translate(var(--hard-offset-x, 0), var(--hard-offset-y, 0));
+        }
+
+        .hard-mode-layer {
+            display: block;
+        }
+
+        .hard-mode-noise-field {
+            position: absolute;
+            inset: -20px;
+            overflow: visible;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        .hard-mode-noise-field span,
+        .hard-mode-noise-field a,
+        .hard-mode-noise-field button,
+        .hard-mode-noise-field button:hover,
+        .hard-mode-noise-field button:active {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            min-width: 3px;
+            min-height: 3px;
+            max-width: 3px;
+            max-height: 3px;
+            padding: 0;
+            margin: 0;
+            border: 0;
+            border-radius: 0;
+            overflow: hidden;
+            opacity: 0.1;
+            color: #111;
+            background: transparent;
+            font-size: 3px;
+            line-height: 3px;
+            text-decoration: none;
+            transform: none;
+            pointer-events: none;
+            appearance: none;
+        }
+
         .task {
             background-color: var(--task-bg-color);
             margin-bottom: 2rem;
@@ -545,6 +632,31 @@
             Score: <span class="score">0</span> / 41
         </div>
     </header>
+    <section class="hard-mode-panel" id="hard-mode">
+        <h2>hard mode</h2>
+        <div class="hard-mode-options">
+            <label>
+                <input type="checkbox" id="hard-random-order" data-hard-mode-option="randomOrder">
+                <span>Randomize challenge order</span>
+            </label>
+            <label>
+                <input type="checkbox" id="hard-random-selectors" data-hard-mode-option="randomSelectors">
+                <span>Randomize element selectors / DOM element nesting so XPaths and CSS selectors break</span>
+            </label>
+            <label>
+                <input type="checkbox" id="hard-coordinate-offsets" data-hard-mode-option="coordinateOffsets">
+                <span>Randomize x/y coordinates (offset challenge cards by 20px in a random direction)</span>
+            </label>
+            <label>
+                <input type="checkbox" id="hard-a11y-noise" data-hard-mode-option="a11yNoise">
+                <span>a11y tree noise (add opacity 0.1 3px by 3px text/link/button elements around challenges)</span>
+            </label>
+            <label>
+                <input type="checkbox" id="hard-continuous-shifting" data-hard-mode-option="continuousShifting">
+                <span>Continuously shifting (randomize DOM nesting, x/y offsets, and a11y tree noise every 2s)</span>
+            </label>
+        </div>
+    </section>
     <center>
         <p>Please complete the following tasks. Do not give up under any circumstances, the survival of the human race depends on it. You can do it!</p>
     </center>
@@ -920,11 +1032,14 @@
         <div class="task" id="iframe-slider">
             <div class="task-badge"><a href="#iframe-slider" id="iframe-slider">iframe-slider</a></div>
             <div class="task-title">Drag the slider completely to the right inside this iframe, then click the popover confirmation inside the iframe</div>
-            <iframe id="slider-iframe-element" style="width: 350px; height: 150px; border: 1px solid #ddd; border-radius: 4px;" src="#"></iframe>
+            <iframe id="slider-iframe-element" style="width: 350px; height: 150px; border: 1px solid #ddd; border-radius: 4px;"></iframe>
             <script>
                 const sliderIframe = document.getElementById('slider-iframe-element');
-                sliderIframe.onload = function() {
+                function installSliderIframe() {
+                    if (sliderIframe.dataset.sliderInstalled === 'true') return;
                     const iframeDoc = sliderIframe.contentDocument || sliderIframe.contentWindow.document;
+                    if (!iframeDoc || !iframeDoc.body) return;
+                    sliderIframe.dataset.sliderInstalled = 'true';
                     
                     // Create the slider in the iframe
                     iframeDoc.body.innerHTML = `
@@ -961,7 +1076,7 @@
                             <input type="range" min="1" max="100" value="1" class="slider" id="iframe-slider">
                             <div class="value-display">Value: <span id="iframe-slider-value">1</span></div>
                         </div>
-                        <div id="iframe-slider-popover" popover>
+                        <div id="iframe-slider-popover" popover="manual">
                             <button id="iframe-slider-popover-button" type="button">Confirm slider position</button>
                         </div>
                     `;
@@ -992,10 +1107,11 @@
                         if (!sliderReady) return;
                         completeTask(document.getElementById('iframe-slider'));
                     });
-                };
-                
-                // Set the iframe source to be about:blank and force load event
-                sliderIframe.src = 'about:blank';
+                }
+
+                sliderIframe.addEventListener('load', installSliderIframe);
+                setTimeout(installSliderIframe, 0);
+                setTimeout(installSliderIframe, 50);
             </script>
         </div>
 
@@ -1116,11 +1232,45 @@
                 <span slot="waiting-target" data-right-click-target="true">Right-click me</span>
             </right-click-component>
             <script>
-                (function() {
-                    const taskElement = document.getElementById('right-click-component');
+	                (function() {
+	                    const taskElement = document.getElementById('right-click-component');
 
-                    if (!customElements.get('right-click-closed-gate')) {
-                        customElements.define('right-click-closed-gate', class extends HTMLElement {
+	                    const rightClickEventTypes = ['contextmenu', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'auxclick'];
+
+	                    function isRightClickAction(event) {
+	                        return event.type === 'contextmenu' || event.button === 2;
+	                    }
+
+	                    function eventPathContainsTarget(event) {
+	                        return event.composedPath().some(node => node && node.dataset && node.dataset.rightClickTarget === 'true');
+	                    }
+
+	                    function eventCoordinatesHitTarget(event) {
+	                        const target = taskElement.querySelector('[data-right-click-target="true"]');
+	                        if (!target || typeof event.clientX !== 'number' || typeof event.clientY !== 'number') {
+	                            return false;
+	                        }
+
+	                        const rect = target.getBoundingClientRect();
+	                        return event.clientX >= rect.left &&
+	                            event.clientX <= rect.right &&
+	                            event.clientY >= rect.top &&
+	                            event.clientY <= rect.bottom;
+	                    }
+
+	                    function completeRightClickFromEvent(event) {
+	                        if (!isRightClickAction(event)) return;
+	                        if (!eventPathContainsTarget(event) && !eventCoordinatesHitTarget(event)) return;
+	                        event.preventDefault();
+	                        completeTask(taskElement);
+	                    }
+
+	                    rightClickEventTypes.forEach(function(type) {
+	                        document.addEventListener(type, completeRightClickFromEvent, true);
+	                    });
+
+	                    if (!customElements.get('right-click-closed-gate')) {
+	                        customElements.define('right-click-closed-gate', class extends HTMLElement {
                             connectedCallback() {
                                 if (this.__ready) return;
                                 this.__ready = true;
@@ -1159,11 +1309,11 @@
                         });
                     }
 
-                    class RightClickComponent extends HTMLElement {
-                        connectedCallback() {
-                            if (this.__ready) return;
-                            this.__ready = true;
-                            setTimeout(() => {
+	                    class RightClickComponent extends HTMLElement {
+	                        connectedCallback() {
+	                            if (this.__ready) return;
+	                            this.__ready = true;
+	                            setTimeout(() => {
                                 const shadow = this.attachShadow({ mode: 'open' });
                                 const wrapper = document.createElement('div');
                                 wrapper.style.padding = '0.7rem';
@@ -1174,6 +1324,69 @@
                                 slot.name = 'right-click-target';
                                 wrapper.appendChild(slot);
                                 shadow.appendChild(wrapper);
+
+                                const eventHitsRightClickTarget = (event) => {
+                                    return event.composedPath().some(node => node && node.dataset && node.dataset.rightClickTarget === 'true');
+                                };
+
+                                const completeFromContextMenu = (event) => {
+                                    if (!eventHitsRightClickTarget(event)) return;
+                                    event.preventDefault();
+                                    completeTask(taskElement);
+                                };
+
+                                const completeFromRightButton = (event) => {
+                                    if (event.button !== 2) return;
+                                    if (!eventHitsRightClickTarget(event)) return;
+                                    event.preventDefault();
+                                    completeTask(taskElement);
+                                };
+
+                                const addRightClickListeners = (element) => {
+                                    element.addEventListener('contextmenu', completeFromContextMenu);
+                                    element.addEventListener('pointerdown', completeFromRightButton);
+                                    element.addEventListener('pointerup', completeFromRightButton);
+                                    element.addEventListener('mousedown', completeFromRightButton);
+                                    element.addEventListener('mouseup', completeFromRightButton);
+                                    element.addEventListener('auxclick', completeFromRightButton);
+                                };
+
+                                addRightClickListeners(wrapper);
+
+                                const completeFromSlottedTargetContextMenu = (event) => {
+                                    event.preventDefault();
+                                    completeTask(taskElement);
+                                };
+
+                                const completeFromSlottedTargetRightButton = (event) => {
+                                    if (event.button !== 2) return;
+                                    event.preventDefault();
+                                    completeTask(taskElement);
+                                };
+
+                                const addSlottedTargetListeners = (element) => {
+                                    element.addEventListener('contextmenu', completeFromSlottedTargetContextMenu);
+                                    element.addEventListener('pointerdown', completeFromSlottedTargetRightButton);
+                                    element.addEventListener('pointerup', completeFromSlottedTargetRightButton);
+                                    element.addEventListener('mousedown', completeFromSlottedTargetRightButton);
+                                    element.addEventListener('mouseup', completeFromSlottedTargetRightButton);
+                                    element.addEventListener('auxclick', completeFromSlottedTargetRightButton);
+                                };
+
+                                const completeFromComponentCapture = (event) => {
+                                    const clickedTarget = event.composedPath().some(node => node && node.dataset && node.dataset.rightClickTarget === 'true');
+                                    if (!clickedTarget) return;
+                                    if (event.type !== 'contextmenu' && event.button !== 2) return;
+                                    event.preventDefault();
+                                    completeTask(taskElement);
+                                };
+
+                                this.addEventListener('contextmenu', completeFromComponentCapture, true);
+                                this.addEventListener('pointerdown', completeFromComponentCapture, true);
+                                this.addEventListener('pointerup', completeFromComponentCapture, true);
+                                this.addEventListener('mousedown', completeFromComponentCapture, true);
+                                this.addEventListener('mouseup', completeFromComponentCapture, true);
+                                this.addEventListener('auxclick', completeFromComponentCapture, true);
 
                                 const gate = document.createElement('right-click-closed-gate');
                                 gate.slot = 'right-click-target';
@@ -1186,6 +1399,7 @@
                                     const target = gate.querySelector('[data-right-click-target="true"]');
                                     if (target) {
                                         target.slot = 'inner-right-click-target';
+                                        addSlottedTargetListeners(target);
                                     }
                                 });
                             }, 90);
@@ -3350,12 +3564,349 @@ ${helperCode}
         
     <!--------------------------------------------------------------------------------------------------->
     <script>
+        (function() {
+            const container = document.querySelector('.container');
+            const optionInputs = Array.from(document.querySelectorAll('[data-hard-mode-option]'));
+            let continuousShiftTimer = null;
+
+            if (!container || optionInputs.length === 0) {
+                return;
+            }
+
+            const optionInputByName = optionInputs.reduce(function(inputs, input) {
+                inputs[input.dataset.hardModeOption] = input;
+                return inputs;
+            }, {});
+
+            function randomInt(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            }
+
+            function randomToken(prefix) {
+                return prefix + '-' + Math.random().toString(36).slice(2, 10) + '-' + randomInt(1000, 9999);
+            }
+
+            function getTasks() {
+                return Array.from(container.querySelectorAll('.task'));
+            }
+
+            getTasks().forEach(function(task, index) {
+                task.dataset.originalTaskIndex = String(index);
+            });
+
+            function getSettings() {
+                return optionInputs.reduce(function(settings, input) {
+                    settings[input.dataset.hardModeOption] = input.checked;
+                    return settings;
+                }, {});
+            }
+
+            function enforceContinuousShiftingOptions() {
+                if (!optionInputByName.continuousShifting || !optionInputByName.continuousShifting.checked) {
+                    return;
+                }
+
+                ['randomSelectors', 'coordinateOffsets', 'a11yNoise'].forEach(function(optionName) {
+                    if (optionInputByName[optionName]) {
+                        optionInputByName[optionName].checked = true;
+                    }
+                });
+            }
+
+            function shuffle(items) {
+                const shuffled = items.slice();
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = randomInt(0, i);
+                    const temp = shuffled[i];
+                    shuffled[i] = shuffled[j];
+                    shuffled[j] = temp;
+                }
+                return shuffled;
+            }
+
+            function getTaskUnit(task) {
+                return task.closest('.task-shell') || task;
+            }
+
+            function ensureTaskShell(task) {
+                const existingShell = task.closest('.task-shell');
+                if (existingShell) {
+                    return existingShell;
+                }
+
+                const shell = document.createElement('div');
+                shell.className = 'task-shell';
+                shell.dataset.hardModeShell = 'true';
+                shell.dataset.originalTaskIndex = task.dataset.originalTaskIndex;
+                task.parentNode.insertBefore(shell, task);
+                shell.appendChild(task);
+                return shell;
+            }
+
+            function clearNesting(shell, task) {
+                if (task.parentElement !== shell) {
+                    shell.insertBefore(task, shell.firstChild);
+                }
+
+                Array.from(shell.children).forEach(function(child) {
+                    if (child.classList && child.classList.contains('hard-mode-layer')) {
+                        child.remove();
+                    }
+                });
+
+                shell.dataset.hardModeNested = 'false';
+            }
+
+            function applySelectorNesting(shell, task, force) {
+                if (!force && shell.dataset.hardModeNested === 'true') {
+                    return;
+                }
+
+                clearNesting(shell, task);
+
+                let parent = shell;
+                const depth = randomInt(2, 5);
+                for (let i = 0; i < depth; i++) {
+                    const layer = document.createElement('div');
+                    layer.className = 'hard-mode-layer ' + randomToken('selector-layer');
+                    layer.id = randomToken('selector-wrap');
+                    layer.dataset.selectorNoise = randomToken('selector-data');
+                    layer.dataset.depth = String(i + 1);
+                    parent.appendChild(layer);
+                    parent = layer;
+                }
+
+                parent.appendChild(task);
+                shell.id = randomToken('challenge-shell');
+                shell.dataset.selectorNoise = randomToken('shell-data');
+                shell.dataset.hardModeNested = 'true';
+            }
+
+            function applyCoordinateOffset(shell, enabled, force) {
+                if (!enabled) {
+                    shell.classList.remove('hard-mode-offset');
+                    shell.style.removeProperty('--hard-offset-x');
+                    shell.style.removeProperty('--hard-offset-y');
+                    return;
+                }
+
+                if (!force && shell.dataset.hardModeOffset === 'true') {
+                    return;
+                }
+
+                const angle = Math.random() * Math.PI * 2;
+                shell.style.setProperty('--hard-offset-x', Math.round(Math.cos(angle) * 20) + 'px');
+                shell.style.setProperty('--hard-offset-y', Math.round(Math.sin(angle) * 20) + 'px');
+                shell.classList.add('hard-mode-offset');
+                shell.dataset.hardModeOffset = 'true';
+            }
+
+            function clearCoordinateOffset(shell) {
+                shell.dataset.hardModeOffset = 'false';
+                applyCoordinateOffset(shell, false);
+            }
+
+            function createNoiseElement(index) {
+                const tagNames = ['span', 'a', 'button'];
+                const tagName = tagNames[index % tagNames.length];
+                const element = document.createElement(tagName);
+                const token = randomToken('a11y-noise');
+
+                if (tagName === 'a') {
+                    element.href = '#hard-mode-' + token;
+                } else if (tagName === 'button') {
+                    element.type = 'button';
+                }
+
+                element.textContent = 'hard mode a11y noise ' + token;
+                element.style.left = randomInt(-2, 102) + '%';
+                element.style.top = randomInt(-2, 102) + '%';
+                element.style.zIndex = String(randomInt(1, 6));
+                return element;
+            }
+
+            function applyA11yNoise(shell, enabled, force) {
+                const existingNoise = shell.querySelector(':scope > .hard-mode-noise-field');
+
+                if (!enabled) {
+                    if (existingNoise) {
+                        existingNoise.remove();
+                    }
+                    return;
+                }
+
+                if (existingNoise && !force) {
+                    return;
+                }
+
+                if (existingNoise) {
+                    existingNoise.remove();
+                }
+
+                const noiseField = document.createElement('div');
+                noiseField.className = 'hard-mode-noise-field';
+                noiseField.setAttribute('aria-label', 'hard mode a11y tree noise');
+
+                for (let i = 0; i < 36; i++) {
+                    noiseField.appendChild(createNoiseElement(i));
+                }
+
+                shell.appendChild(noiseField);
+            }
+
+            function unwrapTaskShell(task) {
+                const shell = task.closest('.task-shell[data-hard-mode-shell="true"]');
+                if (!shell) {
+                    return;
+                }
+
+                clearNesting(shell, task);
+                clearCoordinateOffset(shell);
+                applyA11yNoise(shell, false);
+                shell.parentNode.insertBefore(task, shell);
+                shell.remove();
+            }
+
+            function syncTaskShells(settings, forceRandomize) {
+                const needsShell = settings.randomSelectors || settings.coordinateOffsets || settings.a11yNoise;
+
+                getTasks().forEach(function(task) {
+                    if (!needsShell) {
+                        unwrapTaskShell(task);
+                        return;
+                    }
+
+                    const shell = ensureTaskShell(task);
+
+                    if (settings.randomSelectors) {
+                        applySelectorNesting(shell, task, forceRandomize);
+                    } else {
+                        clearNesting(shell, task);
+                        shell.removeAttribute('id');
+                        shell.removeAttribute('data-selector-noise');
+                    }
+
+                    if (settings.coordinateOffsets) {
+                        applyCoordinateOffset(shell, true, forceRandomize);
+                    } else {
+                        clearCoordinateOffset(shell);
+                    }
+
+                    applyA11yNoise(shell, settings.a11yNoise, forceRandomize);
+                });
+            }
+
+            function sortedUnitsByOriginalOrder() {
+                return getTasks()
+                    .map(getTaskUnit)
+                    .sort(function(a, b) {
+                        return Number(a.dataset.originalTaskIndex || a.querySelector('.task').dataset.originalTaskIndex) -
+                            Number(b.dataset.originalTaskIndex || b.querySelector('.task').dataset.originalTaskIndex);
+                    });
+            }
+
+            function syncTaskOrder(settings) {
+                const units = sortedUnitsByOriginalOrder();
+                const orderedUnits = settings.randomOrder ? shuffle(units) : units;
+
+                orderedUnits.forEach(function(unit) {
+                    container.appendChild(unit);
+                });
+
+                syncActiveTask();
+            }
+
+            function syncActiveTask() {
+                const tasks = getTasks();
+                const firstIncomplete = tasks.find(function(task) {
+                    return !task.classList.contains('completed');
+                });
+
+                tasks.forEach(function(task) {
+                    task.classList.remove('active');
+                });
+
+                if (firstIncomplete) {
+                    firstIncomplete.classList.add('active');
+                }
+
+                if (window.__syncChallengeActiveTask) {
+                    window.__syncChallengeActiveTask();
+                }
+            }
+
+            function applyHardModeOptions() {
+                enforceContinuousShiftingOptions();
+                const settings = getSettings();
+                syncTaskShells(settings);
+                syncTaskOrder(settings);
+                syncContinuousShifting(settings);
+            }
+
+            function rerandomizeContinuousShifting() {
+                enforceContinuousShiftingOptions();
+                const settings = getSettings();
+                if (!settings.continuousShifting) {
+                    syncContinuousShifting(settings);
+                    return;
+                }
+
+                syncTaskShells(settings, true);
+                syncActiveTask();
+            }
+
+            function syncContinuousShifting(settings) {
+                if (continuousShiftTimer) {
+                    clearInterval(continuousShiftTimer);
+                    continuousShiftTimer = null;
+                }
+
+                if (settings.continuousShifting) {
+                    continuousShiftTimer = setInterval(rerandomizeContinuousShifting, 2000);
+                }
+            }
+
+            optionInputs.forEach(function(input) {
+                input.addEventListener('change', applyHardModeOptions);
+            });
+        })();
+    </script>
+
+    <script>
         // Global script for shared functions
         document.addEventListener('DOMContentLoaded', function() {
-            const tasks = document.querySelectorAll('.task');
             const scoreElement = document.querySelector('.score');
             let score = 0;
-            let currentTaskIndex = 0;
+
+            function getTasks() {
+                return Array.from(document.querySelectorAll('.task'));
+            }
+
+            function syncActiveTask() {
+                const tasks = getTasks();
+                const activeIncompleteTask = tasks.find(function(task) {
+                    return task.classList.contains('active') && !task.classList.contains('completed');
+                });
+
+                tasks.forEach(function(task) {
+                    if (task !== activeIncompleteTask) {
+                        task.classList.remove('active');
+                    }
+                });
+
+                if (!activeIncompleteTask) {
+                    const firstIncompleteTask = tasks.find(function(task) {
+                        return !task.classList.contains('completed');
+                    });
+
+                    if (firstIncompleteTask) {
+                        firstIncompleteTask.classList.add('active');
+                    }
+                }
+            }
+
+            window.__syncChallengeActiveTask = syncActiveTask;
+            syncActiveTask();
 
             // Define the global completeTask function that all tasks use
             window.completeTask = function(taskElement) {
@@ -3366,14 +3917,13 @@ ${helperCode}
 
                 taskElement.classList.remove('active');
                 taskElement.classList.add('completed');
-                score++;
+                score = getTasks().filter(function(task) {
+                    return task.classList.contains('completed');
+                }).length;
                 updateScore();
 
-                // Move to next task
-                if (currentTaskIndex < tasks.length - 1) {
-                    currentTaskIndex++;
-                    tasks[currentTaskIndex].classList.add('active');
-                }
+                // Move to next task in the current DOM order.
+                syncActiveTask();
                 
                 // Restore scroll position
                 window.scrollTo(0, scrollPos);
