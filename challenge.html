@@ -565,6 +565,34 @@
             border-radius: 4px;
         }
 
+        .oopif-challenge-frame {
+            width: 100%;
+            max-width: 780px;
+            height: 360px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fff;
+        }
+
+        .oopif-challenge-frame.tall {
+            height: 460px;
+        }
+
+        .oopif-status {
+            margin-top: 0.75rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .oopif-confirm {
+            margin-top: 0.75rem;
+        }
+
+        .oopif-confirm:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.2); }
@@ -629,7 +657,7 @@
     <header>
         <h1>Browser Agent Evaluation Stress-Test</h1>
         <div class="score-container">
-            Score: <span class="score">0</span> / 41
+            Score: <span class="score">0</span> / 44
         </div>
     </header>
     <section class="hard-mode-panel" id="hard-mode">
@@ -1032,14 +1060,13 @@
         <div class="task" id="iframe-slider">
             <div class="task-badge"><a href="#iframe-slider" id="iframe-slider">iframe-slider</a></div>
             <div class="task-title">Drag the slider completely to the right inside this iframe, then click the popover confirmation inside the iframe</div>
-            <iframe id="slider-iframe-element" style="width: 350px; height: 150px; border: 1px solid #ddd; border-radius: 4px;"></iframe>
+            <iframe id="slider-iframe-element" src="about:blank" style="width: 350px; height: 150px; border: 1px solid #ddd; border-radius: 4px;"></iframe>
             <script>
                 const sliderIframe = document.getElementById('slider-iframe-element');
                 function installSliderIframe() {
-                    if (sliderIframe.dataset.sliderInstalled === 'true') return;
                     const iframeDoc = sliderIframe.contentDocument || sliderIframe.contentWindow.document;
                     if (!iframeDoc || !iframeDoc.body) return;
-                    sliderIframe.dataset.sliderInstalled = 'true';
+                    if (iframeDoc.getElementById('iframe-slider')) return;
                     
                     // Create the slider in the iframe
                     iframeDoc.body.innerHTML = `
@@ -1080,7 +1107,7 @@
                             <button id="iframe-slider-popover-button" type="button">Confirm slider position</button>
                         </div>
                     `;
-                    if (sliderIframe.contentWindow.__insertOrdinalNoiseLinks) {
+                    if (sliderIframe.contentWindow && sliderIframe.contentWindow.__insertOrdinalNoiseLinks) {
                         sliderIframe.contentWindow.__insertOrdinalNoiseLinks();
                     }
                     
@@ -1112,6 +1139,150 @@
                 sliderIframe.addEventListener('load', installSliderIframe);
                 setTimeout(installSliderIframe, 0);
                 setTimeout(installSliderIframe, 50);
+                setTimeout(installSliderIframe, 250);
+            </script>
+        </div>
+
+        <!-- Task: OOPIF form submit -->
+        <div class="task" id="oopif-form-submit">
+            <div class="task-badge"><a href="#oopif-form-submit" id="oopif-form-submit">oopif-form-submit</a></div>
+            <div class="task-title">Fill the cross-origin contact form with Ada Lovelace, ada@example.com, and submit it</div>
+            <iframe
+                id="oopif-form-frame"
+                class="oopif-challenge-frame tall"
+                src="https://seanmcguire12.github.io/stagehand-oopif-sites/sites/form-filling/"
+                loading="eager"
+                title="Cross-origin form OOPIF challenge"
+            ></iframe>
+            <div class="oopif-status" id="oopif-form-status">Waiting for the cross-origin frame to load.</div>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('oopif-form-submit');
+                    const frame = document.getElementById('oopif-form-frame');
+                    const status = document.getElementById('oopif-form-status');
+                    let initialLoadSeen = false;
+
+                    frame.addEventListener('load', function() {
+                        if (!initialLoadSeen) {
+                            initialLoadSeen = true;
+                            status.textContent = 'Frame loaded. Submit the contact form inside it.';
+                            return;
+                        }
+
+                        status.textContent = 'The OOPIF form submitted and navigated.';
+                        completeTask(taskElement);
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: OOPIF open shadow root -->
+        <div class="task" id="oopif-open-shadow-button">
+            <div class="task-badge"><a href="#oopif-open-shadow-button" id="oopif-open-shadow-button">oopif-open-shadow-button</a></div>
+            <div class="task-title">Click the button inside the cross-origin open shadow-root iframe, then confirm below</div>
+            <iframe
+                id="oopif-open-shadow-frame"
+                class="oopif-challenge-frame"
+                src="https://seanmcguire12.github.io/stagehand-oopif-sites/sites/osr/"
+                loading="eager"
+                title="Cross-origin open shadow root OOPIF challenge"
+            ></iframe>
+            <div class="oopif-status" id="oopif-open-shadow-status">Waiting for interaction inside the cross-origin iframe.</div>
+            <button type="button" class="oopif-confirm" id="oopif-open-shadow-confirm" disabled>I clicked the open-shadow button</button>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('oopif-open-shadow-button');
+                    const frame = document.getElementById('oopif-open-shadow-frame');
+                    const status = document.getElementById('oopif-open-shadow-status');
+                    const confirmButton = document.getElementById('oopif-open-shadow-confirm');
+                    let frameWasFocused = false;
+                    let focusCheckTimer = null;
+
+                    function markFrameInteraction() {
+                        frameWasFocused = true;
+                        if (focusCheckTimer) {
+                            clearInterval(focusCheckTimer);
+                            focusCheckTimer = null;
+                        }
+                        confirmButton.disabled = false;
+                        status.textContent = 'Frame interaction detected. Confirm after clicking the button inside it.';
+                    }
+
+                    function checkFrameFocus() {
+                        if (document.activeElement === frame) {
+                            markFrameInteraction();
+                        }
+                    }
+
+                    frame.addEventListener('focus', markFrameInteraction);
+                    window.addEventListener('blur', function() {
+                        setTimeout(function() {
+                            checkFrameFocus();
+                        }, 0);
+                    });
+                    focusCheckTimer = setInterval(checkFrameFocus, 100);
+
+                    confirmButton.addEventListener('click', function() {
+                        checkFrameFocus();
+                        if (!frameWasFocused) return;
+                        completeTask(taskElement);
+                    });
+                })();
+            </script>
+        </div>
+
+        <!-- Task: OOPIF closed shadow root -->
+        <div class="task" id="oopif-closed-shadow-button">
+            <div class="task-badge"><a href="#oopif-closed-shadow-button" id="oopif-closed-shadow-button">oopif-closed-shadow-button</a></div>
+            <div class="task-title">Click the button inside the cross-origin closed shadow-root iframe, then confirm below</div>
+            <iframe
+                id="oopif-closed-shadow-frame"
+                class="oopif-challenge-frame"
+                src="https://seanmcguire12.github.io/stagehand-oopif-sites/sites/csr/"
+                loading="eager"
+                title="Cross-origin closed shadow root OOPIF challenge"
+            ></iframe>
+            <div class="oopif-status" id="oopif-closed-shadow-status">Waiting for interaction inside the cross-origin iframe.</div>
+            <button type="button" class="oopif-confirm" id="oopif-closed-shadow-confirm" disabled>I clicked the closed-shadow button</button>
+            <script>
+                (function() {
+                    const taskElement = document.getElementById('oopif-closed-shadow-button');
+                    const frame = document.getElementById('oopif-closed-shadow-frame');
+                    const status = document.getElementById('oopif-closed-shadow-status');
+                    const confirmButton = document.getElementById('oopif-closed-shadow-confirm');
+                    let frameWasFocused = false;
+                    let focusCheckTimer = null;
+
+                    function markFrameInteraction() {
+                        frameWasFocused = true;
+                        if (focusCheckTimer) {
+                            clearInterval(focusCheckTimer);
+                            focusCheckTimer = null;
+                        }
+                        confirmButton.disabled = false;
+                        status.textContent = 'Frame interaction detected. Confirm after clicking the button inside it.';
+                    }
+
+                    function checkFrameFocus() {
+                        if (document.activeElement === frame) {
+                            markFrameInteraction();
+                        }
+                    }
+
+                    frame.addEventListener('focus', markFrameInteraction);
+                    window.addEventListener('blur', function() {
+                        setTimeout(function() {
+                            checkFrameFocus();
+                        }, 0);
+                    });
+                    focusCheckTimer = setInterval(checkFrameFocus, 100);
+
+                    confirmButton.addEventListener('click', function() {
+                        checkFrameFocus();
+                        if (!frameWasFocused) return;
+                        completeTask(taskElement);
+                    });
+                })();
             </script>
         </div>
 

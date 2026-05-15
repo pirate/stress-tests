@@ -177,7 +177,7 @@
             <div class="instructions">
                 Interact with the slider element inside the iframe below and drag it to the right
             </div>
-            <iframe id="slider-iframe-element" src="#"></iframe>
+            <iframe id="slider-iframe-element" src="about:blank"></iframe>
             <div class="success-message" id="success-message">
                 ✅ Challenge completed successfully! You dragged the slider inside the iframe.
             </div>
@@ -214,10 +214,11 @@
             }
         }
 
-        // Task-specific logic
         const sliderIframe = document.getElementById('slider-iframe-element');
-        sliderIframe.onload = function() {
+        function installSliderIframe() {
             const iframeDoc = sliderIframe.contentDocument || sliderIframe.contentWindow.document;
+            if (!iframeDoc || !iframeDoc.body) return;
+            if (iframeDoc.getElementById('iframe-slider')) return;
             
             // Create the slider in the iframe
             iframeDoc.body.innerHTML = `
@@ -259,10 +260,12 @@
                     completeTask(document.getElementById('iframe-slider'));
                 }
             });
-        };
-        
-        // Set the iframe source to be about:blank and force load event
-        sliderIframe.src = 'about:blank';
+        }
+
+        sliderIframe.addEventListener('load', installSliderIframe);
+        setTimeout(installSliderIframe, 0);
+        setTimeout(installSliderIframe, 50);
+        setTimeout(installSliderIframe, 250);
     </script>
 </body>
-</html> 
+</html>
