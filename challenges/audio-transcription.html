@@ -103,10 +103,13 @@
             margin-bottom: 1.5rem;
         }
 
-        audio {
+        .youtube-transcript-video {
             width: 100%;
-            max-width: 400px;
             margin: 1rem 0;
+            max-width: 560px;
+            aspect-ratio: 16 / 9;
+            border: 0;
+            border-radius: 4px;
         }
 
         input[type="text"] {
@@ -169,19 +172,25 @@
 
         <div class="task" id="audio-transcription">
             <div class="task-badge"><a href="#audio-transcription" id="audio-transcription-link">audio-transcription</a></div>
-            <div class="task-title">Play this audio snippet and transcribe the word into this field</div>
+            <div class="task-title">Use the transcript of this embedded YouTube video to find the word immediately after "pre-staging", then type it into this field</div>
             <div class="instructions">
-                Click play on the audio player below to listen to the audio snippet, then type the word you hear in the input field.
+                Find the video's transcript yourself, then enter the requested word from that transcript.
             </div>
-            <audio id="audio-snippet" controls>
-                <source src="../task29-audio.ogg" type="audio/ogg">
-                Your browser does not support the audio element.
-            </audio>
+            <iframe
+                class="youtube-transcript-video"
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/_T8cn2J13-4"
+                title="Embedded YouTube video for transcript lookup"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allowfullscreen
+            ></iframe>
             <div style="margin-top: 10px;">
-                <input type="text" id="transcription-input" placeholder="Type the word in the audio snippet here">
+                <input type="text" id="transcription-input" placeholder="Type the transcript word here">
             </div>
             <div class="success-message" id="success-message">
-                ✅ Challenge completed successfully! You transcribed the word "gossip" correctly.
+                Challenge completed successfully.
             </div>
         </div>
     </div>
@@ -220,10 +229,10 @@
         const transcriptionInput = document.getElementById('transcription-input');
         
         transcriptionInput.addEventListener('input', function() {
-            if (this.value.trim().toLowerCase() === 'gossip') {
+            if (this.value.trim().toLowerCase() === 'everything') {
                 completeTask(document.getElementById('audio-transcription'));
             }
         });
     </script>
 </body>
-</html> 
+</html>

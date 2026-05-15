@@ -657,7 +657,7 @@
     <header>
         <h1>Browser Agent Evaluation Stress-Test</h1>
         <div class="score-container">
-            Score: <span class="score">0</span> / 44
+            Score: <span class="score">0</span> / 45
         </div>
     </header>
     <section class="hard-mode-panel" id="hard-mode">
@@ -2230,21 +2230,27 @@
         <!-- Task: Audio Transcription -->
         <div class="task" id="audio-transcription">
             <div class="task-badge"><a href="#audio-transcription" id="audio-transcription">audio-transcription</a></div>
-            <div class="task-title">Play this audio snippet and transcribe the word into this field</div>
-            <div style="margin: 1rem 0;">
-                <audio id="audio-snippet" controls>
-                    <source src="task29-audio.ogg" type="audio/ogg">
-                    Your browser does not support the audio element.
-                </audio>
+            <div class="task-title">Use the transcript of this embedded YouTube video to find the word immediately after "pre-staging", then type it into this field</div>
+            <div style="margin: 1rem 0; max-width: 560px;">
+                <iframe
+                    width="560"
+                    height="315"
+                    src="https://www.youtube.com/embed/_T8cn2J13-4"
+                    title="Embedded YouTube video for transcript lookup"
+                    style="width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 4px;"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    allowfullscreen
+                ></iframe>
             </div>
             <div style="margin-top: 10px;">
-                <input type="text" id="transcription-input" placeholder="Type the word in the audio snippet here">
+                <input type="text" id="transcription-input" placeholder="Type the transcript word here">
             </div>
             <script>
                 const transcriptionInput = document.getElementById('transcription-input');
                 
                 transcriptionInput.addEventListener('input', function() {
-                    if (this.value.trim().toLowerCase() === 'gossip') {
+                    if (this.value.trim().toLowerCase() === 'everything') {
                         completeTask(document.getElementById('audio-transcription'));
                     }
                 });
@@ -3725,6 +3731,32 @@ ${helperCode}
                 document.getElementById('css-transform-text-input').addEventListener('input', function() {
                     if (this.value.trim().toLowerCase() === 'skyline') {
                         completeTask(document.getElementById('css-transform-text'));
+                    }
+                });
+            </script>
+        </div>
+
+        <!-- Task: Google Docs -->
+        <div class="task" id="google-docs">
+            <div class="task-badge"><a href="#google-docs" id="google-docs">google-docs</a></div>
+            <div class="task-title">Find the answer written inside this embedded Google Doc, then type it into this field</div>
+            <div style="margin: 1rem 0; max-width: 760px;">
+                <iframe
+                    width="760"
+                    height="520"
+                    src="https://docs.google.com/document/d/1cxEN0T5xQQIWmBzve9Vx4baX2eYrj2liQ6JJaXJBOcc/preview"
+                    title="Embedded Google Doc for answer lookup"
+                    style="width: 100%; min-height: 520px; border: 1px solid #ddd; border-radius: 4px;"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                ></iframe>
+            </div>
+            <div style="margin-top: 10px;">
+                <input type="text" id="google-docs-answer-input" placeholder="Type the answer from the doc here">
+            </div>
+            <script>
+                document.getElementById('google-docs-answer-input').addEventListener('input', function() {
+                    if (this.value.trim().toLowerCase() === 'snooker') {
+                        completeTask(document.getElementById('google-docs'));
                     }
                 });
             </script>
