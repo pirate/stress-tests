@@ -1,7 +1,7 @@
-# [Browser-Use Stress Test](https://browser-use.github.io/stress-tests)
+# [Browser Agent Stress Test](https://pirate.github.io/stress-tests/)
 
-> - Guided Evaluation Challenge: https://browser-use.github.io/stress-tests/challenge.html
-> - All the Form Libraries All At Once: https://browser-use.github.io/stress-tests/index.html
+> - Guided Evaluation Challenge: https://pirate.github.io/stress-tests/challenge.html
+> - All the Form Libraries All At Once: https://pirate.github.io/stress-tests/index.html
 > - All the CAPTCHAs: https://2captcha.com/demo
 > - All the browser fingerprints: https://abrahamjuliot.github.io/creepjs/
 
