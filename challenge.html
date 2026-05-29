@@ -664,6 +664,14 @@
         <h2>hard mode</h2>
         <div class="hard-mode-options">
             <label>
+                <input type="checkbox" id="hard-randomize-ids">
+                <span>Randomize element IDs (append random gibberish suffix; grading resolves by prefix)</span>
+            </label>
+            <label>
+                <input type="checkbox" id="hard-randomize-classes">
+                <span>Randomize CSS class names (append random gibberish suffix; grading resolves by prefix)</span>
+            </label>
+            <label>
                 <input type="checkbox" id="hard-random-order" data-hard-mode-option="randomOrder">
                 <span>Randomize challenge order</span>
             </label>
@@ -4071,6 +4079,150 @@ ${helperCode}
 
             optionInputs.forEach(function(input) {
                 input.addEventListener('change', applyHardModeOptions);
+            });
+        })();
+    </script>
+
+    <script>
+        // Hard mode: randomize element IDs / class names with a random gibberish suffix
+        // (regenerated every time a box is checked). Grading and the per-task scripts keep
+        // working because all DOM selection APIs are patched to resolve logical names by
+        // prefix instead of exact match. "__" is the boundary separator between the original
+        // name and the gibberish, so ".foo" -> [class*="foo__"] and "#foo" -> [id^="foo__"].
+        (function () {
+            var SEP = '__';
+            var state = { ids: false, cls: false, sfx: '' };
+
+            // Native references captured before patching, used for internal bookkeeping.
+            var nGEBI = Document.prototype.getElementById;
+            var nDocQS = Document.prototype.querySelector;
+            var nDocQSA = Document.prototype.querySelectorAll;
+            var nElQS = Element.prototype.querySelector;
+            var nElQSA = Element.prototype.querySelectorAll;
+            var nClosest = Element.prototype.closest;
+            var classDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'className');
+            var idDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'id');
+            var tokAdd = DOMTokenList.prototype.add;
+            var tokRemove = DOMTokenList.prototype.remove;
+            var tokToggle = DOMTokenList.prototype.toggle;
+            var tokContains = DOMTokenList.prototype.contains;
+
+            function gibberish() { return SEP + Math.random().toString(36).slice(2, 9); }
+            function base(t) { var i = t.indexOf(SEP); return i === -1 ? t : t.slice(0, i); }
+            function sfxId(v) { return v ? (state.ids ? base(v) + state.sfx : base(v)) : v; }
+            function sfxToken(t) { return state.cls ? base(t) + state.sfx : base(t); }
+            function mapClass(v) {
+                return (v || '').split(/\s+/).filter(Boolean).map(sfxToken).join(' ');
+            }
+            // Rewrite ".name"/"#name" in a selector to a suffix-agnostic attribute selector.
+            function rewriteSel(sel) {
+                if (!state.ids && !state.cls) return sel;
+                return sel.replace(/([#.])(-?[A-Za-z_][\w-]*)/g, function (m, p, n) {
+                    if (p === '.' && state.cls) return '[class*="' + n + SEP + '"]';
+                    if (p === '#' && state.ids) return '[id^="' + n + SEP + '"]';
+                    return m;
+                });
+            }
+
+            // --- Patch selection APIs (only the main document; iframes resolve natively). ---
+            Document.prototype.getElementById = function (id) {
+                if (this === document && state.ids) {
+                    return nGEBI.call(this, id) || nDocQS.call(this, '[id^="' + id + SEP + '"]');
+                }
+                return nGEBI.call(this, id);
+            };
+            Document.prototype.querySelector = function (s) {
+                return nDocQS.call(this, this === document ? rewriteSel(s) : s);
+            };
+            Document.prototype.querySelectorAll = function (s) {
+                return nDocQSA.call(this, this === document ? rewriteSel(s) : s);
+            };
+            Element.prototype.querySelector = function (s) {
+                return nElQS.call(this, this.ownerDocument === document ? rewriteSel(s) : s);
+            };
+            Element.prototype.querySelectorAll = function (s) {
+                return nElQSA.call(this, this.ownerDocument === document ? rewriteSel(s) : s);
+            };
+            Element.prototype.closest = function (s) {
+                return nClosest.call(this, this.ownerDocument === document ? rewriteSel(s) : s);
+            };
+
+            // --- Patch id/className/classList so live attributes carry the suffix. ---
+            Object.defineProperty(Element.prototype, 'id', {
+                configurable: true,
+                get: function () { return idDesc.get.call(this); },
+                set: function (v) { idDesc.set.call(this, this.ownerDocument === document ? sfxId(v) : v); }
+            });
+            Object.defineProperty(Element.prototype, 'className', {
+                configurable: true,
+                get: function () { return classDesc.get.call(this); },
+                set: function (v) {
+                    classDesc.set.call(this, (state.cls && this.ownerDocument === document) ? mapClass(v) : v);
+                }
+            });
+            function mapArgs(args) { return [].map.call(args, function (n) { return base(n) + state.sfx; }); }
+            DOMTokenList.prototype.add = function () {
+                return tokAdd.apply(this, state.cls ? mapArgs(arguments) : arguments);
+            };
+            DOMTokenList.prototype.remove = function () {
+                return tokRemove.apply(this, state.cls ? mapArgs(arguments) : arguments);
+            };
+            DOMTokenList.prototype.toggle = function (n, force) {
+                return tokToggle.call(this, state.cls ? base(n) + state.sfx : n, force);
+            };
+            DOMTokenList.prototype.contains = function (n) {
+                return tokContains.call(this, state.cls ? base(n) + state.sfx : n);
+            };
+
+            // --- Rewrite stylesheet selectors so styling survives renamed classes. ---
+            var savedRules = [];
+            function walkRules(rules) {
+                for (var i = 0; i < rules.length; i++) {
+                    var r = rules[i];
+                    if (r.selectorText) {
+                        savedRules.push({ rule: r, sel: r.selectorText });
+                        try { r.selectorText = rewriteSel(r.selectorText); } catch (e) {}
+                    } else if (r.cssRules) {
+                        walkRules(r.cssRules);
+                    }
+                }
+            }
+            function rewriteStyles() {
+                for (var i = 0; i < document.styleSheets.length; i++) {
+                    try { walkRules(document.styleSheets[i].cssRules); } catch (e) {}
+                }
+            }
+            function restoreStyles() {
+                savedRules.forEach(function (o) { try { o.rule.selectorText = o.sel; } catch (e) {} });
+                savedRules = [];
+            }
+
+            // Re-apply the current suffix to every live id / class attribute.
+            function reapply() {
+                [].forEach.call(nDocQSA.call(document, '[id]'), function (el) {
+                    var b = base(el.getAttribute('id') || '');
+                    if (b) el.setAttribute('id', state.ids ? b + state.sfx : b);
+                });
+                [].forEach.call(nDocQSA.call(document, '[class]'), function (el) {
+                    el.setAttribute('class', mapClass(el.getAttribute('class')));
+                });
+            }
+
+            function sync(turnedOn) {
+                if (turnedOn) { state.sfx = gibberish(); }
+                else if (!state.ids && !state.cls) { state.sfx = ''; }
+                restoreStyles();
+                if (state.cls) { rewriteStyles(); }
+                reapply();
+            }
+
+            [['hard-randomize-ids', 'ids'], ['hard-randomize-classes', 'cls']].forEach(function (pair) {
+                var box = nGEBI.call(document, pair[0]);
+                if (!box) return;
+                box.addEventListener('change', function () {
+                    state[pair[1]] = box.checked;
+                    sync(box.checked);
+                });
             });
         })();
     </script>
