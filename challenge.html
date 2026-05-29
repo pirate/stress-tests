@@ -4118,7 +4118,10 @@ ${helperCode}
             function rewriteSel(sel) {
                 if (!state.ids && !state.cls) return sel;
                 return sel.replace(/([#.])(-?[A-Za-z_][\w-]*)/g, function (m, p, n) {
-                    if (p === '.' && state.cls) return '[class*="' + n + SEP + '"]';
+                    // Token-boundary match (first token, or space-delimited) so e.g. ".container"
+                    // does not also match a scrambled "slider-container". :is() keeps it a single
+                    // compound unit so chained selectors like ".task.active" still work.
+                    if (p === '.' && state.cls) return ':is([class^="' + n + SEP + '"],[class*=" ' + n + SEP + '"])';
                     if (p === '#' && state.ids) return '[id^="' + n + SEP + '"]';
                     return m;
                 });
