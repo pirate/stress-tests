@@ -4052,6 +4052,9 @@ ${helperCode}
                 syncTaskShells(settings);
                 syncTaskOrder(settings);
                 syncContinuousShifting(settings);
+                // Re-parenting tasks re-parses their inline <style>, dropping the id/class
+                // scramble's selector rewrites; re-apply it so styling survives.
+                if (window.__resyncHardScramble) { window.__resyncHardScramble(); }
             }
 
             function rerandomizeContinuousShifting() {
@@ -4064,6 +4067,7 @@ ${helperCode}
 
                 syncTaskShells(settings, true);
                 syncActiveTask();
+                if (window.__resyncHardScramble) { window.__resyncHardScramble(); }
             }
 
             function syncContinuousShifting(settings) {
@@ -4110,7 +4114,9 @@ ${helperCode}
             function gibberish() { return SEP + Math.random().toString(36).slice(2, 9); }
             function base(t) { var i = t.indexOf(SEP); return i === -1 ? t : t.slice(0, i); }
             function sfxId(v) { return v ? (state.ids ? base(v) + state.sfx : base(v)) : v; }
-            function sfxToken(t) { return state.cls ? base(t) + state.sfx : base(t); }
+            // Third-party widget classes (Select2) are styled by a cross-origin stylesheet we
+            // can't rewrite, so they must stay literal — suffixing them would break the widget.
+            function sfxToken(t) { return (state.cls && t.indexOf('select2') !== 0) ? base(t) + state.sfx : base(t); }
             function mapClass(v) {
                 return (v || '').split(/\s+/).filter(Boolean).map(sfxToken).join(' ');
             }
@@ -4121,7 +4127,7 @@ ${helperCode}
                     // Token-boundary match (first token, or space-delimited) so e.g. ".container"
                     // does not also match a scrambled "slider-container". :is() keeps it a single
                     // compound unit so chained selectors like ".task.active" still work.
-                    if (p === '.' && state.cls) return ':is([class^="' + n + SEP + '"],[class*=" ' + n + SEP + '"])';
+                    if (p === '.' && state.cls && n.indexOf('select2') !== 0) return ':is([class^="' + n + SEP + '"],[class*=" ' + n + SEP + '"])';
                     if (p === '#' && state.ids) return '[id^="' + n + SEP + '"]';
                     return m;
                 });
@@ -4163,18 +4169,17 @@ ${helperCode}
                     classDesc.set.call(this, (state.cls && this.ownerDocument === document) ? mapClass(v) : v);
                 }
             });
-            function mapArgs(args) { return [].map.call(args, function (n) { return base(n) + state.sfx; }); }
             DOMTokenList.prototype.add = function () {
-                return tokAdd.apply(this, state.cls ? mapArgs(arguments) : arguments);
+                return tokAdd.apply(this, state.cls ? [].map.call(arguments, sfxToken) : arguments);
             };
             DOMTokenList.prototype.remove = function () {
-                return tokRemove.apply(this, state.cls ? mapArgs(arguments) : arguments);
+                return tokRemove.apply(this, state.cls ? [].map.call(arguments, sfxToken) : arguments);
             };
             DOMTokenList.prototype.toggle = function (n, force) {
-                return tokToggle.call(this, state.cls ? base(n) + state.sfx : n, force);
+                return tokToggle.call(this, state.cls ? sfxToken(n) : n, force);
             };
             DOMTokenList.prototype.contains = function (n) {
-                return tokContains.call(this, state.cls ? base(n) + state.sfx : n);
+                return tokContains.call(this, state.cls ? sfxToken(n) : n);
             };
 
             // --- Rewrite stylesheet selectors so styling survives renamed classes. ---
@@ -4218,6 +4223,10 @@ ${helperCode}
                 if (state.cls) { rewriteStyles(); }
                 reapply();
             }
+
+            // Called by the nesting/order engine after it re-parents tasks (which re-parses
+            // their inline <style>); replays the current scramble onto the fresh stylesheets.
+            window.__resyncHardScramble = function () { if (state.ids || state.cls) { sync(false); } };
 
             [['hard-randomize-ids', 'ids'], ['hard-randomize-classes', 'cls']].forEach(function (pair) {
                 var box = nGEBI.call(document, pair[0]);
